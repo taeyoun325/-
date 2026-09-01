@@ -614,6 +614,73 @@
   .spark .dot{ fill:var(--seq-blue); }
   .spark .baseline{ stroke:var(--line-strong); stroke-width:1; stroke-dasharray:2 3; }
 
+  /* ---------- experiment lab ---------- */
+  .lab{ margin-top:2px; }
+  .lab-intro{ margin:0 0 14px; font-size:12.5px; color:var(--ink-dim); line-height:1.75; }
+  .lab-intro b{ color:var(--ink); }
+  .lab-tabs{
+    display:flex; flex-wrap:wrap; gap:4px;
+    background:var(--panel-2); border:1px solid var(--line);
+    border-radius:10px; padding:3px; margin-bottom:12px;
+    width:fit-content; max-width:100%;
+  }
+  .lab-tab{
+    font:700 12px "Gothic A1",sans-serif; border:none; background:transparent;
+    color:var(--ink-dim); padding:7px 12px; border-radius:7px; cursor:pointer;
+    transition:background .12s ease, color .12s ease;
+  }
+  .lab-tab:hover{ color:var(--ink); }
+  .lab-tab[aria-selected="true"]{ background:var(--panel); color:var(--ink); box-shadow:var(--shadow); }
+  .lab-method{
+    margin:0 0 14px; font-size:11.5px; color:var(--ink-mute); line-height:1.7;
+    border-left:2px solid var(--line-strong); padding-left:11px;
+  }
+  .lab-method b{ color:var(--ink-dim); }
+  .lab-run{ display:flex; align-items:center; gap:10px; flex-wrap:wrap; margin-bottom:14px; }
+  .lab-reps{ font-size:12px; color:var(--ink-dim); display:flex; align-items:center; gap:6px; }
+  .lab-reps input{
+    width:58px; padding:6px 8px; border:1px solid var(--line); border-radius:7px;
+    background:var(--panel-2); color:var(--ink);
+    font:600 12px "IBM Plex Mono",monospace;
+  }
+  .lab-reps input:disabled{ opacity:.4; }
+  .lab-status{ font-size:11.5px; color:var(--ink-mute); font-family:"IBM Plex Mono",monospace; }
+  .lab-body{ display:grid; grid-template-columns:minmax(0,1fr) 276px; gap:18px; align-items:start; }
+  @media (max-width:860px){ .lab-body{ grid-template-columns:1fr; } }
+  .lab-chart-wrap{
+    background:var(--panel-2); border:1px solid var(--line);
+    border-radius:12px; padding:8px; min-height:120px;
+  }
+  canvas#labChart{ display:block; width:100%; height:auto; }
+  .lab-empty{
+    display:flex; align-items:center; justify-content:center;
+    min-height:220px; font-size:12px; color:var(--ink-mute); text-align:center; line-height:1.7;
+    padding:20px;
+  }
+  .lab-side{ display:flex; flex-direction:column; gap:10px; }
+  .lab-table-wrap{ max-height:236px; overflow:auto; border:1px solid var(--line); border-radius:10px; }
+  .lab-table{ width:100%; border-collapse:collapse; font-size:11.5px; }
+  .lab-table th, .lab-table td{
+    padding:5px 9px; border-bottom:1px solid var(--line); text-align:right;
+    font-family:"IBM Plex Mono",monospace; font-variant-numeric:tabular-nums; color:var(--ink-dim);
+    white-space:nowrap;
+  }
+  .lab-table th{ position:sticky; top:0; background:var(--panel-2); color:var(--ink-mute); font-weight:600; }
+  .lab-table td:first-child, .lab-table th:first-child{ text-align:left; font-family:"Gothic A1",sans-serif; color:var(--ink); }
+  .lab-table tr.best td{ color:var(--accent-text); font-weight:700; }
+  .lab-conclusion{
+    font-size:12px; line-height:1.75; color:var(--ink-dim);
+    background:var(--accent-soft); border-radius:10px; padding:11px 13px;
+  }
+  .lab-conclusion b{ color:var(--accent-text); font-family:"IBM Plex Mono",monospace; }
+  .lab-exports{ display:flex; gap:8px; flex-wrap:wrap; }
+  .lab-csv{
+    width:100%; margin-top:8px;
+    font:400 11px/1.6 "IBM Plex Mono",monospace;
+    border:1px solid var(--line); border-radius:8px;
+    background:var(--panel-2); color:var(--ink-dim); padding:9px; resize:vertical;
+  }
+
   details.science{
     margin-top:16px;
     border-top:1px solid var(--line);
@@ -979,6 +1046,59 @@
       </div>
     </aside>
   </div>
+
+  <!-- EXPERIMENT LAB: controlled-variable sweeps -->
+  <section class="panel lab" id="labPanel">
+    <div class="panel-title">
+      <h2>탐구 실험실 · 변인 통제 실험</h2>
+      <span class="hint">변인 하나만 바꿔가며 반복 측정합니다</span>
+    </div>
+
+    <p class="lab-intro">지금 캔버스에 그린 도시를 기준으로 <b>변인 하나만</b> 단계적으로 바꿔가며 시뮬레이션을 반복 실행합니다. 나머지 조건(시간대·바람·열원 계수·격자 크기)은 그대로 고정되므로, 결과 그래프는 <b>그 변인 하나가 만든 차이</b>로 읽을 수 있습니다. 결과는 그래프·표·CSV로 내보내 결과보고서에 바로 붙일 수 있어요.</p>
+
+    <div class="lab-tabs" role="tablist" aria-label="실험 선택">
+      <button class="lab-tab" data-exp="green" role="tab" aria-selected="true">① 녹지 비율 → 기온</button>
+      <button class="lab-tab" data-exp="hour" role="tab" aria-selected="false">② 시간대 → 기온</button>
+      <button class="lab-tab" data-exp="wind" role="tab" aria-selected="false">③ 바람 세기 → 기온</button>
+      <button class="lab-tab" data-exp="shape" role="tab" aria-selected="false">④ 녹지 배치 형태 → 기온</button>
+    </div>
+
+    <p class="lab-method" id="labMethod"></p>
+
+    <div class="lab-run">
+      <label class="lab-reps">반복 <input type="number" id="labReps" min="1" max="30" step="1" value="6"> 회</label>
+      <button class="btn btn-primary" id="btnRunExp">실험 실행 →</button>
+      <span class="lab-status" id="labStatus">대기 중</span>
+    </div>
+
+    <div class="lab-body">
+      <div class="lab-chart-wrap">
+        <div class="lab-empty" id="labEmpty">실험을 실행하면 여기에 결과 그래프가 그려집니다.<br>먼저 캔버스에 도시를 만들고 <b>실험 실행</b>을 눌러보세요.</div>
+        <canvas id="labChart" style="display:none;" aria-label="실험 결과 그래프"></canvas>
+      </div>
+      <div class="lab-side">
+        <div class="lab-table-wrap" id="labTableWrap" style="display:none;">
+          <table class="lab-table" id="labTable"></table>
+        </div>
+        <div class="lab-conclusion" id="labConclusion" style="display:none;"></div>
+        <div class="lab-exports" id="labExports" style="display:none;">
+          <button class="btn" id="btnExpCsv">📊 CSV 내보내기</button>
+          <button class="btn" id="btnExpPng">🖼 그래프 이미지</button>
+        </div>
+        <div class="compare-panel" id="labExportPanel" style="display:none;">
+          <img id="labExportImg" alt="실험 결과 그래프 이미지" width="100%">
+        </div>
+        <span class="save-status" id="labSaveStatus"></span>
+      </div>
+    </div>
+
+    <details class="science" id="labCsvBox" style="display:none;">
+      <summary>CSV 원자료 직접 보기 / 복사</summary>
+      <textarea id="labCsvText" class="lab-csv" readonly rows="9" aria-label="실험 결과 CSV 원자료"></textarea>
+      <button class="btn" id="btnCopyCsv" style="margin-top:8px;">클립보드로 복사</button>
+      <span class="save-status" id="labCopyStatus"></span>
+    </details>
+  </section>
 
   <footer class="meta">건물·도로 비율은 고정, 공원 칸 수(예산) 고정 — AI는 배치만 최적화합니다. <button class="help-again" id="btnHelpAgain">도움말 다시 보기</button></footer>
 </div>
@@ -1447,17 +1567,25 @@ function(t){t.__bidiEngine__=t.prototype.__bidiEngine__=function(t){var r,n,i,a,
   // blows FROM) gets extra weight in that cell's local average, approximating
   // advection without a full fluid-flow solver.
   var WIND_UPWIND_BOOST = 3;
-  function computeTemps(g) {
-    var intensity = intensityForHour(hourOfDay);
-    var wind = WIND_VECTORS[windDir];
-    var wx = wind[0] * windStrength, wy = wind[1] * windStrength;
+  // `env` lets a caller evaluate a grid under conditions other than the ones
+  // currently on screen (used by the controlled-variable experiments, which
+  // must sweep one variable while every other stays pinned). Omitted fields
+  // fall back to the live UI state, so ordinary rendering is unaffected.
+  function computeTemps(g, env) {
+    var hour = (env && env.hour != null) ? env.hour : hourOfDay;
+    var dir = (env && env.windDir) || windDir;
+    var strength = (env && env.windStrength != null) ? env.windStrength : windStrength;
+    var src = (env && env.source) || SOURCE;
+    var intensity = intensityForHour(hour);
+    var wind = WIND_VECTORS[dir];
+    var wx = wind[0] * strength, wy = wind[1] * strength;
     var wLeft = 1 + Math.max(0, wx) * WIND_UPWIND_BOOST;
     var wRight = 1 + Math.max(0, -wx) * WIND_UPWIND_BOOST;
     var wUp = 1 + Math.max(0, wy) * WIND_UPWIND_BOOST;
     var wDown = 1 + Math.max(0, -wy) * WIND_UPWIND_BOOST;
 
     var t = new Float32Array(N);
-    for (var i = 0; i < N; i++) t[i] = SOURCE[g[i]] * intensity;
+    for (var i = 0; i < N; i++) t[i] = src[g[i]] * intensity;
     for (var iter = 0; iter < ITERS; iter++) {
       var nt = new Float32Array(N);
       for (var i2 = 0; i2 < N; i2++) {
@@ -1468,7 +1596,7 @@ function(t){t.__bidiEngine__=t.prototype.__bidiEngine__=function(t){var r,n,i,a,
         if (d.N >= 0) { sum += t[d.N] * wUp; wsum += wUp; }
         if (d.S >= 0) { sum += t[d.S] * wDown; wsum += wDown; }
         var avg = wsum > 0 ? sum / wsum : t[i2];
-        nt[i2] = SOURCE[g[i2]] * intensity * 0.55 + avg * 0.45;
+        nt[i2] = src[g[i2]] * intensity * 0.55 + avg * 0.45;
       }
       t = nt;
     }
@@ -2925,9 +3053,727 @@ function(t){t.__bidiEngine__=t.prototype.__bidiEngine__=function(t){var r,n,i,a,
     requestAnimationFrame(tick);
   });
 
+  // ---- 탐구 실험실: 변인 통제 실험 (controlled-variable experiments) ----
+  // A single run only answers "how hot is THIS city". An inquiry project needs
+  // the other half: pin everything else, step one variable, plot the response.
+  // Every experiment rebuilds from the CURRENT canvas, so the control
+  // conditions are whatever the student set up, and any experiment that
+  // re-randomises a layout is repeated n times (mean ± sample SD) so one lucky
+  // placement can't be mistaken for an effect.
+
+  function shuffleInPlace(arr) {
+    for (var i = arr.length - 1; i > 0; i--) {
+      var j = Math.floor(Math.random() * (i + 1));
+      var tmp = arr[i]; arr[i] = arr[j]; arr[j] = tmp;
+    }
+    return arr;
+  }
+  function meanSd(vals) {
+    var n = vals.length;
+    var mean = 0;
+    for (var i = 0; i < n; i++) mean += vals[i];
+    mean /= n;
+    var sd = 0;
+    if (n > 1) {
+      var acc = 0;
+      for (var k = 0; k < n; k++) acc += (vals[k] - mean) * (vals[k] - mean);
+      sd = Math.sqrt(acc / (n - 1));
+    }
+    return { mean: mean, sd: sd, n: n };
+  }
+  function linearFit(points) {
+    var n = points.length;
+    if (n < 2) return null;
+    var sx = 0, sy = 0, sxx = 0, sxy = 0;
+    points.forEach(function(p){ sx += p.x; sy += p.mean; sxx += p.x * p.x; sxy += p.x * p.mean; });
+    var denom = n * sxx - sx * sx;
+    if (denom === 0) return null;
+    var slope = (n * sxy - sx * sy) / denom;
+    var intercept = (sy - slope * sx) / n;
+    var meanY = sy / n, ssRes = 0, ssTot = 0;
+    points.forEach(function(p){
+      var pred = slope * p.x + intercept;
+      ssRes += (p.mean - pred) * (p.mean - pred);
+      ssTot += (p.mean - meanY) * (p.mean - meanY);
+    });
+    return { slope: slope, intercept: intercept, r2: ssTot > 0 ? 1 - ssRes / ssTot : null };
+  }
+
+  // Proportions of the non-green, non-water surfaces in a grid. Re-filling with
+  // these keeps "what the rest of the city is made of" constant while only the
+  // green budget moves.
+  function baseComposition(g) {
+    var counts = { building: 0, road: 0, grass: 0 }, total = 0;
+    for (var i = 0; i < g.length; i++) {
+      if (counts[g[i]] !== undefined) { counts[g[i]]++; total++; }
+    }
+    if (total === 0) return { building: 0.5, road: 0.3, grass: 0.2 };
+    return { building: counts.building / total, road: counts.road / total, grass: counts.grass / total };
+  }
+  function cityWithParkCount(g, parkCount, comp) {
+    var out = new Array(g.length);
+    var pool = [];
+    for (var i = 0; i < g.length; i++) {
+      if (g[i] === "water") out[i] = "water";
+      else { out[i] = null; pool.push(i); }
+    }
+    shuffleInPlace(pool);
+    var nPark = Math.max(0, Math.min(pool.length, parkCount));
+    for (var p = 0; p < nPark; p++) out[pool[p]] = "park";
+    var rest = pool.length - nPark;
+    var nb = Math.round(comp.building * rest);
+    var nr = Math.round(comp.road * rest);
+    for (var q = nPark; q < pool.length; q++) {
+      var k = q - nPark;
+      out[pool[q]] = k < nb ? "building" : (k < nb + nr ? "road" : "grass");
+    }
+    return out;
+  }
+
+  function cellXY(i) { return [i % SIZE, Math.floor(i / SIZE)]; }
+
+  // Greedy farthest-point sampling: repeatedly take the cell furthest from
+  // everything already chosen. That is the most evenly "sprinkled" set of a
+  // fixed size the grid allows, and it is deterministic given the same seed
+  // cell, so the 분산형 bar doesn't wobble between runs.
+  function farthestPointOrder(free, count) {
+    if (!free.length) return [];
+    var c = (SIZE - 1) / 2;
+    var seed = 0, seedD = Infinity;
+    for (var i = 0; i < free.length; i++) {
+      var xy = cellXY(free[i]);
+      var d = (xy[0] - c) * (xy[0] - c) + (xy[1] - c) * (xy[1] - c);
+      if (d < seedD) { seedD = d; seed = i; }
+    }
+    var chosen = [free[seed]];
+    var remaining = free.slice();
+    remaining.splice(seed, 1);
+    var seedXY = cellXY(chosen[0]);
+    var minD = remaining.map(function(idx){
+      var a = cellXY(idx);
+      return (a[0]-seedXY[0])*(a[0]-seedXY[0]) + (a[1]-seedXY[1])*(a[1]-seedXY[1]);
+    });
+    var want = Math.min(count, free.length);
+    while (chosen.length < want && remaining.length) {
+      var bestPos = 0, bestVal = -1;
+      for (var r = 0; r < remaining.length; r++) {
+        if (minD[r] > bestVal) { bestVal = minD[r]; bestPos = r; }
+      }
+      var picked = remaining[bestPos];
+      chosen.push(picked);
+      remaining.splice(bestPos, 1);
+      minD.splice(bestPos, 1);
+      var pxy = cellXY(picked);
+      for (var m = 0; m < remaining.length; m++) {
+        var q = cellXY(remaining[m]);
+        var dd = (q[0]-pxy[0])*(q[0]-pxy[0]) + (q[1]-pxy[1])*(q[1]-pxy[1]);
+        if (dd < minD[m]) minD[m] = dd;
+      }
+    }
+    return chosen.concat(remaining);
+  }
+
+  // Lays the same green budget out in four textbook patterns, so the layout
+  // SHAPE is the only thing that differs between the bars.
+  function placeParksByShape(base, parkCount, shape) {
+    var out = base.slice();
+    var free = [];
+    for (var i = 0; i < out.length; i++) if (out[i] !== "water") free.push(i);
+    var target = Math.min(parkCount, free.length);
+    var order;
+    var c = (SIZE - 1) / 2;
+    if (shape === "compact") {
+      order = free.slice().sort(function(a, b){
+        var A = cellXY(a), B = cellXY(b);
+        var da = Math.max(Math.abs(A[0]-c), Math.abs(A[1]-c));
+        var db = Math.max(Math.abs(B[0]-c), Math.abs(B[1]-c));
+        return da - db || a - b;
+      });
+    } else if (shape === "edge") {
+      order = free.slice().sort(function(a, b){
+        var A = cellXY(a), B = cellXY(b);
+        var da = Math.min(A[0], A[1], SIZE-1-A[0], SIZE-1-A[1]);
+        var db = Math.min(B[0], B[1], SIZE-1-B[0], SIZE-1-B[1]);
+        return da - db || a - b;
+      });
+    } else if (shape === "spread") {
+      order = farthestPointOrder(free, target);
+    } else {
+      order = shuffleInPlace(free.slice());
+    }
+    for (var s = 0; s < target; s++) out[order[s]] = "park";
+    return out;
+  }
+
+  // Headless version of the on-screen annealer, used for the "AI 최적화" bar.
+  // It keeps the park/movable index lists in sync after an accepted swap —
+  // otherwise later steps keep picking cells that have already changed type and
+  // burn iterations on moves that do nothing.
+  function annealParks(startGrid, steps) {
+    var current = startGrid.slice();
+    var parkIdx = [], movableIdx = [];
+    for (var i = 0; i < current.length; i++) {
+      if (current[i] === "park") parkIdx.push(i);
+      else if (current[i] === "building" || current[i] === "road") movableIdx.push(i);
+    }
+    if (!parkIdx.length || !movableIdx.length) return current;
+    var currentAvg = occupiedStats(current, computeTemps(current)).avg;
+    var best = current.slice(), bestAvg = currentAvg;
+    var T = 1.4;
+    for (var s = 0; s < steps; s++) {
+      var pPos = Math.floor(Math.random() * parkIdx.length);
+      var mPos = Math.floor(Math.random() * movableIdx.length);
+      var pI = parkIdx[pPos], mI = movableIdx[mPos];
+      var savedP = current[pI], savedM = current[mI];
+      current[pI] = savedM; current[mI] = savedP;
+      var avg = occupiedStats(current, computeTemps(current)).avg;
+      var delta = avg - currentAvg;
+      if (delta < 0 || Math.random() < Math.exp(-delta / T)) {
+        currentAvg = avg;
+        parkIdx[pPos] = mI; movableIdx[mPos] = pI;
+        if (avg < bestAvg) { bestAvg = avg; best = current.slice(); }
+      } else {
+        current[pI] = savedP; current[mI] = savedM;
+      }
+      T *= 0.985;
+    }
+    return best;
+  }
+
+  // ---- experiment definitions ----
+  var SHAPE_ORDER = ["compact", "spread", "edge", "random", "ai"];
+  var SHAPE_LABEL = {
+    compact: "집중형", spread: "분산형", edge: "가장자리형", random: "무작위형", ai: "AI 최적화"
+  };
+
+  function controlSummary() {
+    return "시간대 " + formatHour(hourOfDay) +
+      " · 바람 " + (windStrength === 0 ? "없음" : WIND_LABELS[windDir] + " " + Math.round(windStrength*100) + "%") +
+      " · 격자 " + SIZE + "×" + SIZE;
+  }
+
+  var LAB_EXPERIMENTS = {
+    green: {
+      title: "녹지 비율에 따른 거주역 평균기온",
+      xLabel: "녹지(공원) 비율 (%)",
+      yLabel: "거주역 평균기온 (℃)",
+      xHeader: "녹지 비율(%)",
+      mode: "line",
+      usesReps: true,
+      method: "<b>조작변인</b> 녹지 칸 수(0%→50%, 5%p 간격) · <b>종속변인</b> 거주역(건물·도로·빈터) 평균기온 · <b>통제변인</b> 물의 위치, 건물:도로:빈터 구성비, 시간대, 바람, 열원 계수. 각 조건마다 녹지를 무작위로 다시 배치해 반복 횟수만큼 측정하고 평균±표준편차를 냅니다.",
+      steps: function(){ var out = []; for (var p = 0; p <= 50; p += 5) out.push(p); return out; },
+      label: function(v){ return String(v); },
+      prepare: function(){ return { comp: baseComposition(grid) }; },
+      run: function(v, ctxObj){
+        var g = cityWithParkCount(grid, Math.round(v / 100 * N), ctxObj.comp);
+        return 24 + occupiedStats(g, computeTemps(g)).avg;
+      },
+      conclude: function(res){
+        var first = res.points[0], last = res.points[res.points.length - 1];
+        var fit = linearFit(res.points);
+        var drop = first.mean - last.mean;
+        var txt = "녹지 비율을 " + first.label + "%에서 " + last.label + "%로 늘리자 거주역 평균기온이 <b>" +
+          first.mean.toFixed(2) + "℃ → " + last.mean.toFixed(2) + "℃</b>로 " +
+          (drop >= 0 ? "<b>" + drop.toFixed(2) + "℃ 낮아졌습니다</b>." : "<b>" + Math.abs(drop).toFixed(2) + "℃ 높아졌습니다</b>.");
+        if (fit) {
+          txt += " 회귀 기울기는 <b>" + fit.slope.toFixed(3) + "℃/%p</b>" +
+            (fit.r2 != null ? " (R²=<b>" + fit.r2.toFixed(3) + "</b>)" : "") +
+            "로, 녹지 1%p를 늘릴 때마다 평균 " + Math.abs(fit.slope).toFixed(3) + "℃씩 " +
+            (fit.slope < 0 ? "낮아지는" : "높아지는") + " 경향입니다.";
+        }
+        return txt;
+      }
+    },
+
+    hour: {
+      title: "시간대에 따른 거주역 평균기온(일주기)",
+      xLabel: "시각 (시)",
+      yLabel: "거주역 평균기온 (℃)",
+      xHeader: "시각(시)",
+      mode: "line",
+      usesReps: false,
+      method: "<b>조작변인</b> 시각(0시→23시, 1시간 간격) · <b>종속변인</b> 거주역 평균기온 · <b>통제변인</b> 지금 캔버스의 도시 배치 그대로, 바람, 열원 계수. 배치를 전혀 바꾸지 않아 결과가 매번 같으므로 반복 측정이 필요 없습니다(n=1).",
+      steps: function(){ var out = []; for (var h = 0; h < 24; h++) out.push(h); return out; },
+      label: function(v){ return String(v); },
+      prepare: function(){ return {}; },
+      run: function(v){
+        return 24 + occupiedStats(grid, computeTemps(grid, { hour: v })).avg;
+      },
+      conclude: function(res){
+        var hot = res.points[0], cold = res.points[0];
+        res.points.forEach(function(p){
+          if (p.mean > hot.mean) hot = p;
+          if (p.mean < cold.mean) cold = p;
+        });
+        return "가장 더운 시각은 <b>" + hot.label + "시(" + hot.mean.toFixed(2) + "℃)</b>, 가장 시원한 시각은 <b>" +
+          cold.label + "시(" + cold.mean.toFixed(2) + "℃)</b>로 하루 최대 격차는 <b>" +
+          (hot.mean - cold.mean).toFixed(2) + "℃</b>입니다. 태양 복사가 사라지는 밤에는 재질 사이의 온도차도 함께 줄어드는 모델이라, 열섬 대책의 효과 역시 낮 시간대에 가장 크게 나타납니다.";
+      }
+    },
+
+    wind: {
+      title: "바람 세기에 따른 거주역 평균기온",
+      xLabel: "바람 세기 (%)",
+      yLabel: "거주역 평균기온 (℃)",
+      xHeader: "바람 세기(%)",
+      mode: "line",
+      usesReps: false,
+      method: "<b>조작변인</b> 바람 세기(0%→100%, 10%p 간격) · <b>종속변인</b> 거주역 평균기온 · <b>통제변인</b> 지금 캔버스의 도시 배치, 바람 <i>방향</i>, 시간대, 열원 계수. 방향을 고정한 채 세기만 바꾸므로 반복 측정이 필요 없습니다(n=1).",
+      steps: function(){ var out = []; for (var w = 0; w <= 100; w += 10) out.push(w); return out; },
+      label: function(v){ return String(v); },
+      prepare: function(){ return {}; },
+      run: function(v){
+        return 24 + occupiedStats(grid, computeTemps(grid, { windStrength: v / 100 })).avg;
+      },
+      conclude: function(res){
+        var first = res.points[0], last = res.points[res.points.length - 1];
+        var diff = first.mean - last.mean;
+        return "바람이 없을 때 <b>" + first.mean.toFixed(2) + "℃</b>이던 거주역 평균기온이 세기 100%에서 <b>" +
+          last.mean.toFixed(2) + "℃</b>가 되어 " +
+          (diff >= 0 ? "<b>" + diff.toFixed(2) + "℃ 낮아졌습니다</b>" : "<b>" + Math.abs(diff).toFixed(2) + "℃ 높아졌습니다</b>") +
+          ". 이 모델의 바람은 열을 없애는 것이 아니라 <b>상풍 쪽 칸의 열을 하풍 쪽으로 더 강하게 옮기는</b> 근사이므로, 시원한 녹지·수변이 바람이 불어오는 쪽에 있을수록 이득이 커집니다. 바람 <i>방향</i>을 바꿔 다시 실험해 비교해 보세요.";
+      }
+    },
+
+    shape: {
+      title: "같은 녹지 예산에서 배치 형태에 따른 거주역 평균기온",
+      xLabel: "녹지 배치 형태",
+      yLabel: "거주역 평균기온 (℃)",
+      xHeader: "배치 형태",
+      mode: "bar",
+      usesReps: true,
+      method: "<b>조작변인</b> 녹지 배치 형태(집중·분산·가장자리·무작위·AI) · <b>종속변인</b> 거주역 평균기온 · <b>통제변인</b> 녹지 칸 수(현재 도시와 동일), 물의 위치, 건물:도로:빈터 구성비, 시간대, 바람, 열원 계수. 무작위형과 AI 최적화는 반복 횟수만큼 다시 실행해 평균±표준편차를 내고, 규칙이 정해진 나머지 셋은 결과가 하나로 정해집니다(n=1).",
+      steps: function(){ return SHAPE_ORDER.slice(); },
+      label: function(v){ return SHAPE_LABEL[v]; },
+      prepare: function(){
+        var parkCount = grid.filter(function(t){ return t === "park"; }).length;
+        if (parkCount === 0) {
+          return { error: "이 실험은 지금 도시의 녹지 칸 수를 예산으로 사용합니다. 공원·녹지를 먼저 칠하거나 도시 프리셋을 만든 뒤 다시 실행해 주세요." };
+        }
+        var comp = baseComposition(grid);
+        return { parkCount: parkCount, base: cityWithParkCount(grid, 0, comp), comp: comp };
+      },
+      repsFor: function(v, reps){
+        if (v === "ai") return Math.max(1, Math.min(4, reps));
+        if (v === "random") return reps;
+        return 1;
+      },
+      run: function(v, ctxObj){
+        var g = (v === "ai")
+          ? annealParks(placeParksByShape(ctxObj.base, ctxObj.parkCount, "random"), 220)
+          : placeParksByShape(ctxObj.base, ctxObj.parkCount, v);
+        return 24 + occupiedStats(g, computeTemps(g)).avg;
+      },
+      conclude: function(res){
+        var best = res.points[0], worst = res.points[0];
+        res.points.forEach(function(p){
+          if (p.mean < best.mean) best = p;
+          if (p.mean > worst.mean) worst = p;
+        });
+        var byLabel = {};
+        res.points.forEach(function(p){ byLabel[p.label] = p; });
+        var txt = "같은 녹지 예산(" + res.parkCount + "칸)이라도 배치 형태에 따라 평균기온이 가장 낮은 <b>" +
+          best.label + "(" + best.mean.toFixed(2) + "℃)</b>과 가장 높은 <b>" + worst.label + "(" + worst.mean.toFixed(2) +
+          "℃)</b> 사이에서 <b>" + (worst.mean - best.mean).toFixed(2) + "℃</b>만큼 갈렸습니다.";
+        var ai = byLabel[SHAPE_LABEL.ai], rnd = byLabel[SHAPE_LABEL.random], spread = byLabel[SHAPE_LABEL.spread];
+        if (ai && rnd) {
+          var gain = rnd.mean - ai.mean;
+          txt += " AI 최적화 배치는 같은 예산의 무작위 배치보다 평균 <b>" + gain.toFixed(2) + "℃</b> " +
+            (gain >= 0 ? "낮았고" : "높았고");
+          if (rnd.sd > 0.0005) {
+            txt += " (무작위 배치 표준편차 " + rnd.sd.toFixed(2) + "℃의 <b>" + (gain / rnd.sd).toFixed(1) + "배</b>)";
+          }
+          txt += ".";
+        }
+        if (spread && byLabel[SHAPE_LABEL.compact]) {
+          var d = byLabel[SHAPE_LABEL.compact].mean - spread.mean;
+          txt += " 녹지를 한곳에 몰아넣는 것보다 고르게 흩뿌리는 쪽이 <b>" + Math.abs(d).toFixed(2) + "℃</b> " +
+            (d > 0 ? "더 시원했습니다" : "오히려 덜 시원했습니다") +
+            " — 냉각 효과가 이웃 칸으로 퍼지는 거리에 한계가 있기 때문입니다.";
+        }
+        return txt;
+      }
+    }
+  };
+
+  // ---- lab UI ----
+  var labChartCanvas = document.getElementById("labChart");
+  var labEmptyEl = document.getElementById("labEmpty");
+  var labMethodEl = document.getElementById("labMethod");
+  var labStatusEl = document.getElementById("labStatus");
+  var labRepsEl = document.getElementById("labReps");
+  var labTableWrap = document.getElementById("labTableWrap");
+  var labTableEl = document.getElementById("labTable");
+  var labConclusionEl = document.getElementById("labConclusion");
+  var labExportsEl = document.getElementById("labExports");
+  var labSaveStatusEl = document.getElementById("labSaveStatus");
+  var labCsvBox = document.getElementById("labCsvBox");
+  var labCsvText = document.getElementById("labCsvText");
+  var labExportPanel = document.getElementById("labExportPanel");
+  var labExportImg = document.getElementById("labExportImg");
+  var currentExp = "green";
+  var lastLabResult = null;
+  var labRunning = false;
+
+  var LAB_LIGHT_PALETTE = {
+    bg: "#fcfcfa", ink: "#1a1d18", dim: "#55594c", mute: "#8a8e7f",
+    line: "#e2e5da", axis: "#9aa08c", series: "#2a78d6",
+    seriesSoft: "rgba(42,120,214,0.14)", best: "#1f7a5c"
+  };
+  function labThemePalette() {
+    return {
+      bg: cssVar("--panel-2"), ink: cssVar("--ink"), dim: cssVar("--ink-dim"), mute: cssVar("--ink-mute"),
+      line: cssVar("--line"), axis: cssVar("--line-strong"), series: cssVar("--seq-blue"),
+      seriesSoft: cssVar("--seq-blue-soft"), best: cssVar("--accent")
+    };
+  }
+
+  var LAB_CHART_W = 660, LAB_CHART_H = 340;
+
+  function drawExpChart(ctx, W, H, res, pal) {
+    ctx.save();
+    ctx.fillStyle = pal.bg;
+    ctx.fillRect(0, 0, W, H);
+
+    var L = 62, R = 18, T = 46, B = res.mode === "bar" ? 58 : 52;
+    var plotW = W - L - R, plotH = H - T - B;
+    var n = res.points.length;
+
+    ctx.textBaseline = "alphabetic";
+    ctx.textAlign = "left";
+    ctx.fillStyle = pal.ink;
+    ctx.font = "700 14px 'Gothic A1', sans-serif";
+    ctx.fillText(res.title, 14, 22);
+    ctx.font = "500 10px 'IBM Plex Mono', monospace";
+    ctx.fillStyle = pal.mute;
+    ctx.fillText("통제: " + res.control, 14, 37);
+
+    var lo = Infinity, hi = -Infinity;
+    res.points.forEach(function(p){
+      lo = Math.min(lo, p.mean - p.sd);
+      hi = Math.max(hi, p.mean + p.sd);
+    });
+    if (!isFinite(lo)) { lo = 0; hi = 1; }
+    var span = hi - lo;
+    if (span < 0.5) { var mid = (hi + lo) / 2; lo = mid - 0.25; hi = mid + 0.25; span = 0.5; }
+    lo -= span * 0.14; hi += span * 0.14;
+    function yOf(v){ return T + plotH - (v - lo) / (hi - lo) * plotH; }
+
+    ctx.strokeStyle = pal.line;
+    ctx.lineWidth = 1;
+    ctx.font = "500 10.5px 'IBM Plex Mono', monospace";
+    ctx.textBaseline = "middle";
+    for (var g = 0; g <= 4; g++) {
+      var v = lo + (hi - lo) * g / 4;
+      var gy = Math.round(yOf(v)) + 0.5;
+      ctx.beginPath(); ctx.moveTo(L, gy); ctx.lineTo(L + plotW, gy); ctx.stroke();
+      ctx.fillStyle = pal.mute;
+      ctx.textAlign = "right";
+      ctx.fillText(v.toFixed(1), L - 8, gy);
+    }
+
+    ctx.strokeStyle = pal.axis;
+    ctx.lineWidth = 1.2;
+    ctx.beginPath();
+    ctx.moveTo(L + 0.5, T); ctx.lineTo(L + 0.5, T + plotH); ctx.lineTo(L + plotW, T + plotH);
+    ctx.stroke();
+
+    ctx.fillStyle = pal.dim;
+    ctx.font = "600 11px 'Gothic A1', sans-serif";
+    ctx.textAlign = "center";
+    ctx.textBaseline = "alphabetic";
+    ctx.fillText(res.xLabel, L + plotW / 2, H - 10);
+    ctx.save();
+    ctx.translate(13, T + plotH / 2);
+    ctx.rotate(-Math.PI / 2);
+    ctx.fillText(res.yLabel, 0, 0);
+    ctx.restore();
+
+    var bestIdx = 0;
+    res.points.forEach(function(p, i){ if (p.mean < res.points[bestIdx].mean) bestIdx = i; });
+
+    function xOf(i) {
+      if (res.mode === "bar") return L + (i + 0.5) * (plotW / n);
+      return n === 1 ? L + plotW / 2 : L + (i / (n - 1)) * plotW;
+    }
+
+    if (res.mode === "bar") {
+      var slot = plotW / n, bw = Math.min(52, slot * 0.56);
+      res.points.forEach(function(p, i){
+        var cx = xOf(i), y = yOf(p.mean);
+        ctx.fillStyle = i === bestIdx ? pal.best : pal.series;
+        ctx.fillRect(cx - bw / 2, y, bw, T + plotH - y);
+      });
+    } else {
+      ctx.beginPath();
+      res.points.forEach(function(p, i){
+        var x = xOf(i), y = yOf(p.mean);
+        if (i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
+      });
+      ctx.lineTo(xOf(n - 1), T + plotH);
+      ctx.lineTo(xOf(0), T + plotH);
+      ctx.closePath();
+      ctx.fillStyle = pal.seriesSoft;
+      ctx.fill();
+
+      ctx.beginPath();
+      res.points.forEach(function(p, i){
+        var x = xOf(i), y = yOf(p.mean);
+        if (i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
+      });
+      ctx.strokeStyle = pal.series;
+      ctx.lineWidth = 2.2;
+      ctx.lineJoin = "round";
+      ctx.stroke();
+    }
+
+    // error bars (± sample SD), drawn on top of both mark types
+    ctx.strokeStyle = pal.dim;
+    ctx.lineWidth = 1.1;
+    res.points.forEach(function(p, i){
+      if (p.sd <= 0.005) return;
+      var x = xOf(i), yTop = yOf(p.mean + p.sd), yBot = yOf(p.mean - p.sd);
+      ctx.beginPath();
+      ctx.moveTo(x, yTop); ctx.lineTo(x, yBot);
+      ctx.moveTo(x - 3.5, yTop); ctx.lineTo(x + 3.5, yTop);
+      ctx.moveTo(x - 3.5, yBot); ctx.lineTo(x + 3.5, yBot);
+      ctx.stroke();
+    });
+
+    if (res.mode !== "bar") {
+      res.points.forEach(function(p, i){
+        var x = xOf(i), y = yOf(p.mean);
+        ctx.beginPath();
+        ctx.arc(x, y, i === bestIdx ? 4 : 2.8, 0, Math.PI * 2);
+        ctx.fillStyle = i === bestIdx ? pal.best : pal.series;
+        ctx.fill();
+        if (i === bestIdx) { ctx.strokeStyle = pal.bg; ctx.lineWidth = 1.5; ctx.stroke(); }
+      });
+    }
+
+    ctx.textAlign = "center";
+    ctx.textBaseline = "top";
+    var every = res.mode === "bar" ? 1 : Math.ceil(n / 12);
+    res.points.forEach(function(p, i){
+      if (i % every !== 0 && i !== n - 1) return;
+      ctx.font = res.mode === "bar"
+        ? "600 10.5px 'Gothic A1', sans-serif"
+        : "500 10px 'IBM Plex Mono', monospace";
+      ctx.fillStyle = (res.mode === "bar" && i === bestIdx) ? pal.best : pal.mute;
+      ctx.fillText(p.label, xOf(i), T + plotH + 8);
+      if (res.mode === "bar") {
+        ctx.font = "500 9.5px 'IBM Plex Mono', monospace";
+        ctx.fillText(p.mean.toFixed(2) + "℃", xOf(i), T + plotH + 23);
+      }
+    });
+
+    ctx.restore();
+  }
+
+  function sizeLabCanvas() {
+    var dpr = window.devicePixelRatio || 1;
+    labChartCanvas.width = Math.round(LAB_CHART_W * dpr);
+    labChartCanvas.height = Math.round(LAB_CHART_H * dpr);
+    labChartCanvas.style.aspectRatio = LAB_CHART_W + " / " + LAB_CHART_H;
+    var ctx = labChartCanvas.getContext("2d");
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    return ctx;
+  }
+  function renderLabChart() {
+    if (!lastLabResult) return;
+    drawExpChart(sizeLabCanvas(), LAB_CHART_W, LAB_CHART_H, lastLabResult, labThemePalette());
+  }
+  // Export renders the same chart at 2x on a fixed LIGHT palette: report pages
+  // are printed on white, so a dark-theme screenshot would be unusable there.
+  function labChartToCanvas() {
+    var scale = 2;
+    var c = document.createElement("canvas");
+    c.width = LAB_CHART_W * scale;
+    c.height = LAB_CHART_H * scale;
+    var ctx = c.getContext("2d");
+    ctx.scale(scale, scale);
+    drawExpChart(ctx, LAB_CHART_W, LAB_CHART_H, lastLabResult, LAB_LIGHT_PALETTE);
+    return c;
+  }
+
+  function renderLabTable(res) {
+    var bestIdx = 0;
+    res.points.forEach(function(p, i){ if (p.mean < res.points[bestIdx].mean) bestIdx = i; });
+    var head = "<thead><tr><th>" + res.xHeader + "</th><th>평균(℃)</th>" +
+      (res.hasSd ? "<th>±SD</th><th>n</th>" : "") + "</tr></thead>";
+    var body = res.points.map(function(p, i){
+      return "<tr class=\"" + (i === bestIdx ? "best" : "") + "\"><td>" + p.label + "</td><td>" +
+        p.mean.toFixed(2) + "</td>" +
+        (res.hasSd ? "<td>" + (p.n > 1 ? p.sd.toFixed(2) : "–") + "</td><td>" + p.n + "</td>" : "") +
+        "</tr>";
+    }).join("");
+    labTableEl.innerHTML = head + "<tbody>" + body + "</tbody>";
+    labTableWrap.style.display = "block";
+  }
+
+  function buildLabCsv(res) {
+    var rows = [];
+    rows.push("# 쿨시티 그리드 · 변인 통제 실험 결과");
+    rows.push("# 실험," + res.title);
+    rows.push("# 통제변인," + res.control);
+    rows.push("# 열원계수(℃)," + ["building","road","park","water","grass"].map(function(t){
+      return t + "=" + SOURCE[t].toFixed(2);
+    }).join(" "));
+    rows.push("# 생성시각," + new Date().toLocaleString("ko-KR"));
+    rows.push([res.xHeader, "평균기온(℃)", "표준편차(℃)", "반복수"].join(","));
+    res.points.forEach(function(p){
+      rows.push([p.label, p.mean.toFixed(3), p.n > 1 ? p.sd.toFixed(3) : "", p.n].join(","));
+    });
+    return rows.join("\r\n");
+  }
+
+  function runExperimentAsync(key, reps, done) {
+    var exp = LAB_EXPERIMENTS[key];
+    var xs = exp.steps();
+    var prepared = exp.prepare();
+    if (prepared && prepared.error) { done(null, prepared.error); return; }
+    var points = [];
+    var idx = 0;
+    var hasSd = false;
+
+    // Runs conditions in ~40 ms slices and yields between slices: long enough
+    // to finish most sweeps in one or two ticks (background tabs clamp timers
+    // to ~1 s, which would otherwise stretch a 24-point sweep to half a minute)
+    // and short enough that the page never visibly locks up.
+    var SLICE_MS = 40;
+    function stepOnce() {
+      var sliceStart = (window.performance && performance.now) ? performance.now() : Date.now();
+      do {
+        var x = xs[idx];
+        var r = exp.repsFor ? exp.repsFor(x, reps) : (exp.usesReps ? reps : 1);
+        var vals = [];
+        for (var k = 0; k < r; k++) vals.push(exp.run(x, prepared));
+        var st = meanSd(vals);
+        if (st.n > 1) hasSd = true;
+        points.push({
+          x: typeof x === "number" ? x : idx,
+          label: exp.label(x),
+          mean: st.mean, sd: st.sd, n: st.n
+        });
+        idx++;
+        var now = (window.performance && performance.now) ? performance.now() : Date.now();
+      } while (idx < xs.length && now - sliceStart < SLICE_MS);
+      labStatusEl.textContent = "실행 중 " + idx + "/" + xs.length + " …";
+      if (idx < xs.length) {
+        setTimeout(stepOnce, 0);
+      } else {
+        done({
+          key: key,
+          title: exp.title,
+          xLabel: exp.xLabel,
+          yLabel: exp.yLabel,
+          xHeader: exp.xHeader,
+          mode: exp.mode,
+          control: controlSummary() + (exp.usesReps ? " · 반복 " + reps + "회" : " · n=1"),
+          points: points,
+          hasSd: hasSd,
+          reps: reps,
+          parkCount: prepared.parkCount,
+          conclusion: exp.conclude({ points: points, parkCount: prepared.parkCount })
+        }, null);
+      }
+    }
+    stepOnce();
+  }
+
+  function selectExperiment(key) {
+    currentExp = key;
+    document.querySelectorAll(".lab-tab").forEach(function(b){
+      b.setAttribute("aria-selected", b.dataset.exp === key ? "true" : "false");
+    });
+    labMethodEl.innerHTML = LAB_EXPERIMENTS[key].method;
+    labRepsEl.disabled = !LAB_EXPERIMENTS[key].usesReps;
+    labRepsEl.parentNode.title = LAB_EXPERIMENTS[key].usesReps
+      ? "무작위 배치의 운을 상쇄하기 위한 반복 측정 횟수"
+      : "이 실험은 배치를 바꾸지 않아 결과가 항상 같습니다(반복 불필요)";
+  }
+
+  document.querySelectorAll(".lab-tab").forEach(function(btn){
+    btn.addEventListener("click", function(){ selectExperiment(btn.dataset.exp); });
+  });
+
+  document.getElementById("btnRunExp").addEventListener("click", function(){
+    if (labRunning) return;
+    var reps = Math.max(1, Math.min(30, parseInt(labRepsEl.value, 10) || 6));
+    labRepsEl.value = reps;
+    labRunning = true;
+    var btn = this;
+    btn.disabled = true;
+    labStatusEl.textContent = "준비 중 …";
+    setSaveStatus(labSaveStatusEl, "", "");
+
+    runExperimentAsync(currentExp, reps, function(res, err){
+      labRunning = false;
+      btn.disabled = false;
+      if (err) {
+        labStatusEl.textContent = "실행 불가";
+        labConclusionEl.style.display = "block";
+        labConclusionEl.textContent = err;
+        return;
+      }
+      lastLabResult = res;
+      labEmptyEl.style.display = "none";
+      labChartCanvas.style.display = "block";
+      renderLabChart();
+      renderLabTable(res);
+      labConclusionEl.style.display = "block";
+      labConclusionEl.innerHTML = res.conclusion;
+      labExportsEl.style.display = "flex";
+      labCsvBox.style.display = "block";
+      labCsvText.value = buildLabCsv(res);
+      labStatusEl.textContent = "완료 (" + res.points.length + "개 조건)";
+    });
+  });
+
+  document.getElementById("btnExpCsv").addEventListener("click", async function(){
+    if (!lastLabResult) return;
+    setSaveStatus(labSaveStatusEl, "", "저장 중…");
+    // UTF-8 BOM so Excel opens the Korean headers correctly
+    var blob = new Blob(["﻿" + buildLabCsv(lastLabResult)], { type: "text/csv;charset=utf-8" });
+    var result = await tryDownloadsSave("쿨시티그리드_실험_" + lastLabResult.key + ".csv", blob);
+    if (result.ok) setSaveStatus(labSaveStatusEl, "ok", "✓ 저장 요청을 보냈습니다");
+    else if (result.reason === "declined") setSaveStatus(labSaveStatusEl, "", "저장을 취소했습니다");
+    else setSaveStatus(labSaveStatusEl, "err", "자동 저장 불가 — 아래 'CSV 원자료'를 복사해 주세요");
+  });
+
+  document.getElementById("btnExpPng").addEventListener("click", async function(){
+    if (!lastLabResult) return;
+    setSaveStatus(labSaveStatusEl, "", "저장 중…");
+    var dataUrl = labChartToCanvas().toDataURL("image/png");
+    var blob = await dataUrlToBlob(dataUrl);
+    var result = await tryDownloadsSave("쿨시티그리드_실험그래프_" + lastLabResult.key + ".png", blob);
+    if (result.ok) setSaveStatus(labSaveStatusEl, "ok", "✓ 저장 요청을 보냈습니다");
+    else if (result.reason === "declined") setSaveStatus(labSaveStatusEl, "", "저장을 취소했습니다");
+    else {
+      labExportImg.src = dataUrl;
+      labExportPanel.style.display = "block";
+      setSaveStatus(labSaveStatusEl, "", "아래 이미지를 우클릭 → 저장하세요");
+    }
+  });
+
+  document.getElementById("btnCopyCsv").addEventListener("click", function(){
+    var statusEl = document.getElementById("labCopyStatus");
+    var text = labCsvText.value;
+    function ok(){ setSaveStatus(statusEl, "ok", "✓ 복사했습니다"); }
+    function fail(){
+      labCsvText.focus(); labCsvText.select();
+      setSaveStatus(statusEl, "", "직접 Ctrl+C로 복사해 주세요");
+    }
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(text).then(ok, fail);
+    } else { fail(); }
+  });
+
+  selectExperiment("green");
+
   // ---- theme change: recolor cells if user or OS toggles theme ----
   var mq = window.matchMedia("(prefers-color-scheme: dark)");
-  function onThemeMaybeChanged(){ refreshHeatStops(); render(); }
+  function onThemeMaybeChanged(){ refreshHeatStops(); render(); renderLabChart(); }
   if (mq.addEventListener) mq.addEventListener("change", onThemeMaybeChanged);
   new MutationObserver(onThemeMaybeChanged).observe(document.documentElement, { attributes:true, attributeFilter:["data-theme"] });
 
