@@ -1205,6 +1205,7 @@
     }
 
     var litProb = solar > 0.4 ? 0.04 : (0.25 + (1 - solar) * 0.4);
+    var animPhase = REDUCED_MOTION ? 0.5 : (Date.now() / 3400) % 1;
 
     for (var k = 0; k < order.length; k++) {
       var o = order[k];
@@ -1260,6 +1261,54 @@
         isoCtx.beginPath(); isoCtx.ellipse(c2x, c2y, hw*0.26, hh*0.46, 0, 0, Math.PI*2); isoCtx.fill();
         isoCtx.fillStyle = shadeRgb(rgb, 0.95);
         isoCtx.beginPath(); isoCtx.ellipse(c1x - hw*0.08, c1y - hh*0.12, hw*0.14, hh*0.22, 0, 0, Math.PI*2); isoCtx.fill();
+      } else if (type === "road") {
+        drawRoadLife(o.i, baseX, topY, hw, hh, animPhase);
+      }
+    }
+  }
+
+  // ---- road life: a car and/or pedestrians on some road tiles ----
+  var CAR_BODY = ["#e8e8e4", "#c94f4f", "#3a6fd8", "#e0b23c", "#3a3d38"];
+  var REDUCED_MOTION = window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+
+  function drawMiniBox(cx, groundY, footScale, heightUnits, bodyHex) {
+    var mhw = hw_g * footScale, mhh = hh_g * footScale;
+    var topY2 = groundY - heightUnits * ISO_HEIGHT_SCALE;
+    var rgb = [parseInt(bodyHex.substr(1,2),16), parseInt(bodyHex.substr(3,2),16), parseInt(bodyHex.substr(5,2),16)];
+    var N=[cx,topY2-mhh], E=[cx+mhw,topY2], S=[cx,topY2+mhh], W=[cx-mhw,topY2];
+    var Sg=[S[0],S[1]+heightUnits*ISO_HEIGHT_SCALE], Wg=[W[0],W[1]+heightUnits*ISO_HEIGHT_SCALE], Eg=[E[0],E[1]+heightUnits*ISO_HEIGHT_SCALE];
+    isoCtx.beginPath(); isoCtx.moveTo(W[0],W[1]); isoCtx.lineTo(S[0],S[1]); isoCtx.lineTo(Sg[0],Sg[1]); isoCtx.lineTo(Wg[0],Wg[1]); isoCtx.closePath();
+    isoCtx.fillStyle = shadeRgb(rgb, 0.62); isoCtx.fill();
+    isoCtx.beginPath(); isoCtx.moveTo(E[0],E[1]); isoCtx.lineTo(S[0],S[1]); isoCtx.lineTo(Sg[0],Sg[1]); isoCtx.lineTo(Eg[0],Eg[1]); isoCtx.closePath();
+    isoCtx.fillStyle = shadeRgb(rgb, 0.85); isoCtx.fill();
+    isoCtx.beginPath(); isoCtx.moveTo(N[0],N[1]); isoCtx.lineTo(E[0],E[1]); isoCtx.lineTo(S[0],S[1]); isoCtx.lineTo(W[0],W[1]); isoCtx.closePath();
+    isoCtx.fillStyle = "rgb(" + rgb[0] + "," + rgb[1] + "," + rgb[2] + ")"; isoCtx.fill();
+    isoCtx.strokeStyle = "rgba(0,0,0,.25)"; isoCtx.lineWidth = 0.6; isoCtx.stroke();
+  }
+  function drawPedestrianDot(cx, cy) {
+    isoCtx.beginPath(); isoCtx.ellipse(cx, cy + 1.4, 1.6, 0.8, 0, 0, Math.PI*2);
+    isoCtx.fillStyle = "rgba(0,0,0,0.22)"; isoCtx.fill();
+    isoCtx.beginPath(); isoCtx.arc(cx, cy - 0.6, 1.3, 0, Math.PI*2);
+    isoCtx.fillStyle = "#3d3a34"; isoCtx.fill();
+  }
+  var hw_g, hh_g;
+  function drawRoadLife(i, baseX, roadTopY, hw, hh, animPhase) {
+    hw_g = hw; hh_g = hh;
+    var slotRand = pseudoRand(i * 41 + 3);
+    if (slotRand < 0.30) {
+      var axis = pseudoRand(i * 41 + 5) < 0.5 ? 1 : -1;
+      var phase = (animPhase + pseudoRand(i * 41 + 7)) % 1;
+      var travel = (phase * 2 - 1) * hw * 0.45;
+      var cx = baseX + axis * travel;
+      var cy = roadTopY + axis * travel * (hh / hw) * 0.5;
+      var color = CAR_BODY[Math.floor(pseudoRand(i * 41 + 9) * CAR_BODY.length)];
+      drawMiniBox(cx, cy, 0.34, 0.45, color);
+    } else if (slotRand < 0.52) {
+      var pex = baseX + (pseudoRand(i * 41 + 11) - 0.5) * hw * 1.3;
+      var pey = roadTopY + (pseudoRand(i * 41 + 13) - 0.5) * hh * 0.6;
+      drawPedestrianDot(pex, pey);
+      if (pseudoRand(i * 41 + 15) < 0.35) {
+        drawPedestrianDot(pex + 3, pey + 1);
       }
     }
   }
@@ -1271,6 +1320,24 @@
   var canvasHint = document.getElementById("canvasHint");
   var toggleNumsRow = document.getElementById("toggleNumsRow");
 
+  // Redraws the iso canvas a few times a second while it's visible so cars
+  // and pedestrians drift, without burning cycles on the hidden flat view.
+  var isoAnimActive = false, isoAnimLastT = 0;
+  function isoAnimTick(ts) {
+    if (!isoAnimActive) return;
+    if (ts - isoAnimLastT > 140) {
+      isoAnimLastT = ts;
+      drawIso();
+    }
+    requestAnimationFrame(isoAnimTick);
+  }
+  function startIsoAnim() {
+    if (isoAnimActive || REDUCED_MOTION) return;
+    isoAnimActive = true;
+    requestAnimationFrame(isoAnimTick);
+  }
+  function stopIsoAnim() { isoAnimActive = false; }
+
   function selectView(view) {
     var isFlat = view === "flat";
     paneFlat.classList.toggle("active", isFlat);
@@ -1279,7 +1346,7 @@
     tabIso.setAttribute("aria-selected", isFlat ? "false" : "true");
     canvasHint.textContent = isFlat ? "클릭 후 드래그해서 칠하세요" : "회전 버튼으로 각도를 바꿔보세요";
     toggleNumsRow.style.display = isFlat ? "flex" : "none";
-    if (!isFlat) drawIso();
+    if (isFlat) { stopIsoAnim(); } else { drawIso(); startIsoAnim(); }
   }
   tabFlat.addEventListener("click", function(){ selectView("flat"); });
   tabIso.addEventListener("click", function(){ selectView("iso"); });
