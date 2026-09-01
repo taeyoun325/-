@@ -1232,6 +1232,7 @@
     <div class="lab-run">
       <label class="lab-reps">반복 <input type="number" id="labReps" min="1" max="30" step="1" value="6"> 회</label>
       <button class="btn btn-primary" id="btnRunExp">실험 실행 →</button>
+      <button class="btn" id="btnRunAllExp" title="다섯 실험을 차례로 모두 실행합니다. PDF 보고서에 실험 페이지가 모두 실립니다.">전체 실험 실행</button>
       <span class="lab-status" id="labStatus" role="status" aria-live="polite">대기 중</span>
     </div>
 
@@ -4587,6 +4588,19 @@ function(t){t.__bidiEngine__=t.prototype.__bidiEngine__=function(t){var r,n,i,a,
     stepOnce();
   }
 
+  function showLabResult(res) {
+    labEmptyEl.style.display = "none";
+    labChartCanvas.style.display = "block";
+    renderLabChart();
+    renderLabTable(res);
+    labConclusionEl.style.display = "block";
+    labConclusionEl.innerHTML = res.conclusion;
+    labExportsEl.style.display = "flex";
+    labCsvBox.style.display = "block";
+    labCsvText.value = buildLabCsv(res);
+    scheduleSave();
+  }
+
   function selectExperiment(key) {
     currentExp = key;
     document.querySelectorAll(".lab-tab").forEach(function(b){
@@ -4624,18 +4638,49 @@ function(t){t.__bidiEngine__=t.prototype.__bidiEngine__=function(t){var r,n,i,a,
       }
       lastLabResult = res;
       labResults[res.key] = res;
-      scheduleSave();
-      labEmptyEl.style.display = "none";
-      labChartCanvas.style.display = "block";
-      renderLabChart();
-      renderLabTable(res);
-      labConclusionEl.style.display = "block";
-      labConclusionEl.innerHTML = res.conclusion;
-      labExportsEl.style.display = "flex";
-      labCsvBox.style.display = "block";
-      labCsvText.value = buildLabCsv(res);
+      showLabResult(res);
       labStatusEl.textContent = "완료 (" + res.points.length + "개 조건)";
     });
+  });
+
+  // Running the whole battery is the normal thing to do right before exporting
+  // a report, and clicking through five tabs by hand is an easy step to forget.
+  document.getElementById("btnRunAllExp").addEventListener("click", function(){
+    if (labRunning) return;
+    var queue = LAB_ORDER.slice();
+    var failures = [];
+    var runBtn = document.getElementById("btnRunExp");
+    var allBtn = this;
+    var reps = Math.max(1, Math.min(30, parseInt(labRepsEl.value, 10) || 6));
+    labRunning = true;
+    runBtn.disabled = true;
+    allBtn.disabled = true;
+
+    function next() {
+      if (!queue.length) {
+        labRunning = false;
+        runBtn.disabled = false;
+        allBtn.disabled = false;
+        labStatusEl.textContent = failures.length
+          ? "완료 — " + (LAB_ORDER.length - failures.length) + "/" + LAB_ORDER.length + "개 (건너뜀: " + failures.join(", ") + ")"
+          : "전체 " + LAB_ORDER.length + "개 실험 완료";
+        return;
+      }
+      var key = queue.shift();
+      selectExperiment(key);
+      labStatusEl.textContent = "전체 실행 " + (LAB_ORDER.length - queue.length) + "/" + LAB_ORDER.length + " · " + LAB_NUMERAL[key] + " …";
+      runExperimentAsync(key, reps, function(res, err){
+        if (err) {
+          failures.push(LAB_NUMERAL[key]);
+        } else {
+          lastLabResult = res;
+          labResults[res.key] = res;
+          showLabResult(res);
+        }
+        setTimeout(next, 0);
+      });
+    }
+    next();
   });
 
   document.getElementById("btnExpCsv").addEventListener("click", async function(){
