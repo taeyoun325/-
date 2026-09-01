@@ -1,4 +1,5 @@
 <meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Black+Han+Sans&family=Gothic+A1:wght@400;500;600;700;800&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
@@ -677,9 +678,12 @@
   }
   canvas#labChart{ display:block; width:100%; height:auto; }
   .lab-empty{
-    display:flex; align-items:center; justify-content:center;
-    min-height:220px; font-size:12px; color:var(--ink-mute); text-align:center; line-height:1.7;
-    padding:20px;
+    display:grid; place-items:center;
+    min-height:220px; padding:24px;
+  }
+  .lab-empty span{
+    display:block; max-width:34ch;
+    font-size:12px; color:var(--ink-mute); text-align:center; line-height:1.8;
   }
   .lab-side{ display:flex; flex-direction:column; gap:10px; }
   .lab-table-wrap{ max-height:236px; overflow:auto; border:1px solid var(--line); border-radius:10px; }
@@ -703,6 +707,20 @@
     font:400 11px/1.6 "IBM Plex Mono",monospace;
     border:1px solid var(--line); border-radius:8px;
     background:var(--panel-2); color:var(--ink-dim); padding:9px; resize:vertical;
+  }
+
+  /* ---------- narrow screens ---------- */
+  @media (max-width:520px){
+    .app{ padding:18px 12px 44px; gap:14px; }
+    .panel{ padding:14px; }
+    /* the title and its hint sit side by side on desktop; at this width that
+       forces the heading to break mid-word, so stack them instead */
+    .panel-title{ flex-direction:column; align-items:flex-start; gap:3px; }
+    .lab-tabs{ width:100%; }
+    .lab-tab{ flex:1 1 44%; text-align:center; }
+    .lab-table-wrap{ max-height:none; }
+    .city-row{ flex-wrap:wrap; }
+    .env-panel .wind-controls{ flex-wrap:wrap; }
   }
 
   details.science{
@@ -1126,7 +1144,7 @@
 
     <div class="lab-body">
       <div class="lab-chart-wrap">
-        <div class="lab-empty" id="labEmpty">실험을 실행하면 여기에 결과 그래프가 그려집니다.<br>먼저 캔버스에 도시를 만들고 <b>실험 실행</b>을 눌러보세요.</div>
+        <div class="lab-empty" id="labEmpty"><span>실험을 실행하면 여기에 결과 그래프가 그려집니다. 먼저 캔버스에 도시를 만든 뒤 <b>실험 실행</b>을 눌러보세요.</span></div>
         <canvas id="labChart" style="display:none;" aria-label="실험 결과 그래프"></canvas>
       </div>
       <div class="lab-side">
@@ -4025,7 +4043,7 @@ function(t){t.__bidiEngine__=t.prototype.__bidiEngine__=function(t){var r,n,i,a,
     ctx.fillStyle = pal.bg;
     ctx.fillRect(0, 0, W, H);
 
-    var L = 62, R = 18, T = headless ? 20 : 46, B = res.mode === "bar" ? 58 : 52;
+    var L = 62, R = 18, T = headless ? 20 : 46, B = res.mode === "bar" ? 68 : 52;
     var plotW = W - L - R, plotH = H - T - B;
     var n = res.points.length;
 
