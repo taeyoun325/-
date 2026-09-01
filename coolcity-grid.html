@@ -1886,6 +1886,35 @@
     return err;
   }
 
+  // Standard fit-quality metrics (MAE, RMSE, R²) computed straight from the
+  // predicted/measured pairs, not from the sum-of-squares the grid search
+  // minimizes internally — keeping "how the fit is scored for reporting"
+  // separate from "what the search optimizes" avoids conflating the two.
+  function fitMetrics(mult, measured, activeTypes) {
+    Object.keys(mult).forEach(function(ty){ SOURCE[ty] = BASE_SOURCE[ty] * mult[ty]; });
+    var t = computeTemps(grid);
+    var avgByType = perTypeAvgTemp(grid, t);
+    var n = activeTypes.length;
+    var sumAbs = 0, sumSq = 0, meanMeas = 0;
+    var pairs = activeTypes.map(function(ty){
+      var predicted = 24 + (avgByType[ty] || 0);
+      return { predicted: predicted, measured: measured[ty] };
+    });
+    pairs.forEach(function(p){ meanMeas += p.measured; });
+    meanMeas /= n;
+    pairs.forEach(function(p){
+      var d = p.predicted - p.measured;
+      sumAbs += Math.abs(d);
+      sumSq += d * d;
+    });
+    var r2 = null;
+    if (n >= 2) {
+      var ssTot = pairs.reduce(function(a, p){ return a + (p.measured - meanMeas) * (p.measured - meanMeas); }, 0);
+      r2 = ssTot > 0 ? 1 - sumSq / ssTot : null;
+    }
+    return { mae: sumAbs / n, rmse: Math.sqrt(sumSq / n), r2: r2, n: n };
+  }
+
   function gridSearch1D(ty, mult, measured, activeTypes, coarseSteps, fineSteps) {
     var range = CALIB_RANGES[ty].slice();
     for (var pass = 0; pass < 2; pass++) {
@@ -1922,17 +1951,15 @@
       return;
     }
 
-    // baseline error (multiplier = 1 for every type, i.e. today's assumed coefficients)
+    // baseline metrics (multiplier = 1 for every type, i.e. today's assumed coefficients)
     var mult1 = { building: 1, road: 1, park: 1, water: 1 };
-    var errBefore = calibErrorFor(mult1, measured, activeTypes);
-    var maeBefore = Math.sqrt(errBefore / activeTypes.length);
+    var metricsBefore = fitMetrics(mult1, measured, activeTypes);
 
     var mult = { building: 1, road: 1, park: 1, water: 1 };
     for (var cycle = 0; cycle < 2; cycle++) {
       activeTypes.forEach(function(ty){ gridSearch1D(ty, mult, measured, activeTypes, 8, 6); });
     }
-    var errAfter = calibErrorFor(mult, measured, activeTypes);
-    var maeAfter = Math.sqrt(errAfter / activeTypes.length);
+    var metricsAfter = fitMetrics(mult, measured, activeTypes);
 
     var rows = activeTypes.map(function(ty){
       var label = { building: "건물", road: "도로", park: "공원", water: "물" }[ty];
@@ -1943,11 +1970,15 @@
     var skipNote = skipped.length
       ? "<div style=\"color:var(--ink-mute); margin-top:6px;\">※ 지금 격자에 없는 재질(" + skipped.map(function(t){ return {building:"건물",road:"도로",park:"공원",water:"물"}[t]; }).join(", ") + ")은 제외했습니다.</div>"
       : "";
+    var r2Line = metricsAfter.r2 != null
+      ? ("R² " + metricsAfter.r2.toFixed(2))
+      : "R² 계산 불가(재질 2개 이상 실측 필요)";
     resultEl.style.display = "block";
     resultEl.innerHTML =
       "<table><thead><tr><th>재질</th><th>보정 전 계수</th><th>보정 후 계수</th></tr></thead><tbody>" + rows + "</tbody></table>" +
-      "<div class=\"err-line\">평균 오차 " + maeBefore.toFixed(2) + "℃ → " + maeAfter.toFixed(2) + "℃</div>" + skipNote;
-    lastCalibResult = { maeBefore: maeBefore, maeAfter: maeAfter, types: activeTypes.slice() };
+      "<div class=\"err-line\">RMSE " + metricsBefore.rmse.toFixed(2) + "℃ → " + metricsAfter.rmse.toFixed(2) + "℃</div>" +
+      "<div style=\"color:var(--ink-dim); margin-top:4px;\">MAE " + metricsAfter.mae.toFixed(2) + "℃ · " + r2Line + " (n=" + metricsAfter.n + ")</div>" + skipNote;
+    lastCalibResult = { metricsBefore: metricsBefore, metricsAfter: metricsAfter, types: activeTypes.slice() };
 
     updateCoefTable();
     render();
@@ -2048,8 +2079,11 @@
     heading("열원 계수 보정");
     var isCalibrated = Object.keys(BASE_SOURCE).some(function(k){ return Math.abs(SOURCE[k] - BASE_SOURCE[k]) > 0.01; });
     if (lastCalibResult) {
-      row("평균 오차 (보정 전 → 후)", lastCalibResult.maeBefore.toFixed(2) + " → " + lastCalibResult.maeAfter.toFixed(2) + " ℃", "#0ca30c");
-      paragraph("실측 데이터로 보정된 재질: " + lastCalibResult.types.map(function(t){ return MATERIAL_LABEL[t]; }).join(", "));
+      var mb = lastCalibResult.metricsBefore, ma = lastCalibResult.metricsAfter;
+      row("RMSE (보정 전 → 후)", mb.rmse.toFixed(2) + " → " + ma.rmse.toFixed(2) + " ℃", "#0ca30c");
+      row("MAE (보정 후)", ma.mae.toFixed(2) + " ℃");
+      row("R² (보정 후)", ma.r2 != null ? ma.r2.toFixed(2) : "계산 불가(n<2)");
+      paragraph("실측 데이터로 보정된 재질: " + lastCalibResult.types.map(function(t){ return MATERIAL_LABEL[t]; }).join(", ") + " (n=" + ma.n + ")");
     } else if (isCalibrated) {
       paragraph("이전에 보정한 계수가 적용되어 있습니다(저장된 작업에서 복원됨). 정확한 보정 오차 수치를 카드에 남기려면 실측 보정을 다시 실행해 주세요.");
     } else {
