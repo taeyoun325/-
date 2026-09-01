@@ -1956,7 +1956,7 @@ function(t){t.__bidiEngine__=t.prototype.__bidiEngine__=function(t){var r,n,i,a,
     return { x: Math.cos(t * Math.PI), y: Math.sin(t * Math.PI), elev: solarFactor(hour) };
   }
   function heightField(g) {
-    var h = new Float32Array(N);
+    var h = _hfBuf;
     for (var i = 0; i < N; i++) h[i] = cellHeight(i, g[i]);
     return h;
   }
@@ -2029,7 +2029,7 @@ function(t){t.__bidiEngine__=t.prototype.__bidiEngine__=function(t){var r,n,i,a,
     var hf = heightField(g);
     var rays = shadeRays(sunDirection(hour));
     var night = 1 - solarFactor(hour);
-    var srcField = new Float32Array(N);
+    var srcField = _srcBuf;
     for (var i = 0; i < N; i++) {
       var base = src[g[i]] * intensity * ventilation;
       // shade removes SOLAR gain, so it only applies to surfaces the sun is
@@ -2040,10 +2040,9 @@ function(t){t.__bidiEngine__=t.prototype.__bidiEngine__=function(t){var r,n,i,a,
       srcField[i] = base + (1 - svfAt(hf, i)) * NIGHT_TRAP * night * ventilation;
     }
 
-    var t = new Float32Array(N);
+    var t = _bufA, nt = _bufB;
     for (var i0 = 0; i0 < N; i0++) t[i0] = srcField[i0];
     for (var iter = 0; iter < ITERS; iter++) {
-      var nt = new Float32Array(N);
       for (var i2 = 0; i2 < N; i2++) {
         var d = neighborDir[i2];
         var sum = 0, wsum = 0;
@@ -2057,9 +2056,10 @@ function(t){t.__bidiEngine__=t.prototype.__bidiEngine__=function(t){var r,n,i,a,
         var avg = wsum > 0 ? sum / wsum : t[i2];
         nt[i2] = srcField[i2] * 0.55 + avg * 0.45;
       }
-      t = nt;
+      var swap = t; t = nt; nt = swap;
     }
-    return t;
+    // a fresh copy: render() holds on to its result across later solves
+    return t.slice();
   }
 
   // What matters for a heat-island study is how hot it is WHERE PEOPLE ARE, so
@@ -3042,6 +3042,14 @@ function(t){t.__bidiEngine__=t.prototype.__bidiEngine__=function(t){var r,n,i,a,
       samples: n
     };
   }
+  // The diffusion loop used to allocate a fresh Float32Array for every one of
+  // its ITERS passes -- 11 arrays per solve, and the annealers run thousands of
+  // solves a second, so that is a lot of garbage for no reason. These scratch
+  // buffers are ping-ponged instead. They never escape computeTemps (the result
+  // is still returned as a fresh copy), so no caller can be aliased by them.
+  var _bufA = new Float32Array(N), _bufB = new Float32Array(N);
+  var _hfBuf = new Float32Array(N), _srcBuf = new Float32Array(N);
+
   var MAP_TEXTURE_MAX = 0.12; // measured: map artwork ~0.06, aerial ~0.20
   function detectSourceMode(st) {
     if (!st) return "map";
@@ -4177,9 +4185,12 @@ function(t){t.__bidiEngine__=t.prototype.__bidiEngine__=function(t){var r,n,i,a,
 
     function tick() {
       var did = 0;
-      // a hidden tab clamps timers to ~1s per tick, so do far more work per
-      // tick there -- nothing is being drawn for those steps anyway
-      var budget = document.hidden ? 80 : stepsPerFrame;
+      // A hidden tab clamps timers to ~1 s, and after a few minutes hidden
+      // Chrome throttles them to about once a MINUTE -- so any per-tick budget
+      // small enough to animate nicely turns into a multi-minute run in the
+      // background. Nothing is drawn while hidden and the whole search is under
+      // 100 ms of compute, so just finish it in one tick.
+      var budget = document.hidden ? totalSteps : stepsPerFrame;
       while (did < budget && step < totalSteps) {
         var pPos = Math.floor(rng() * parkIdx.length);
         var mPos = Math.floor(rng() * movableIdx.length);
@@ -5084,12 +5095,16 @@ function(t){t.__bidiEngine__=t.prototype.__bidiEngine__=function(t){var r,n,i,a,
     var idx = 0;
     var hasSd = false;
 
-    // Runs conditions in ~40 ms slices and yields between slices: long enough
-    // to finish most sweeps in one or two ticks (background tabs clamp timers
-    // to ~1 s, which would otherwise stretch a 24-point sweep to half a minute)
-    // and short enough that the page never visibly locks up.
-    var SLICE_MS = 40;
+    // Runs conditions in short slices and yields between them, so the page
+    // never visibly locks up. The slice has to grow when the tab is hidden:
+    // Chrome clamps background timers to ~1 s, and after a few minutes hidden
+    // it throttles them to roughly once a MINUTE, which turns a nine-condition
+    // sweep into a nine-minute one. Nothing is being drawn while hidden, so
+    // there is no reason to yield -- the whole sweep costs well under a second
+    // of compute either way (one diffusion solve is ~0.25 ms).
+    function sliceBudget() { return document.hidden ? 60000 : 40; }
     function stepOnce() {
+      var SLICE_MS = sliceBudget();
       var sliceStart = (window.performance && performance.now) ? performance.now() : Date.now();
       do {
         var x = xs[idx];
@@ -5698,7 +5713,8 @@ function(t){t.__bidiEngine__=t.prototype.__bidiEngine__=function(t){var r,n,i,a,
     var planner = makePlanner(base, sets, budget, TOTAL);
 
     function tick() {
-      planner.run(document.hidden ? 90 : 16);
+      // same reasoning as the park optimiser: finish in one tick when hidden
+      planner.run(document.hidden ? TOTAL : 16);
       drawSpark(planner.history);
       chartStatus.textContent = "종합 설계 탐색 중 (" + planner.step + "/" + TOTAL + ")";
       if (!planner.done) scheduleOptimizeTick(tick);
