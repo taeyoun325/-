@@ -155,6 +155,7 @@
     letter-spacing:.01em;
     text-wrap:balance;
   }
+  .tagline b{ color:var(--ink); font-weight:700; }
   .tagline{
     margin:0;
     max-width:46ch;
@@ -969,7 +970,7 @@
     <div class="brand">
       <span class="eyebrow">Urban Heat Island · AI Layout Optimizer</span>
       <h1>쿨시티 그리드</h1>
-      <p class="tagline">도시를 직접 칠하고, AI가 정해진 녹지 예산 안에서 열섬을 가장 많이 식히는 배치를 찾아줍니다.</p>
+      <p class="tagline">도시를 직접 칠하면 AI가 두 가지를 찾아줍니다 — 같은 녹지로 <b>어디에 심을지</b>, 정해진 예산으로 <b>어떤 대책을 어디에 쓸지</b>.</p>
     </div>
     <span class="subject-tag">2026 공동탐구 전국대회 · 주제6 열섬현상(자유)</span>
   </header>
@@ -1277,6 +1278,7 @@
       <button class="lab-tab" data-exp="wind" role="tab" aria-selected="false">③ 바람 세기 → 기온</button>
       <button class="lab-tab" data-exp="shape" role="tab" aria-selected="false">④ 녹지 배치 형태 → 기온</button>
       <button class="lab-tab" data-exp="measure" role="tab" aria-selected="false">⑤ 저감 대책별 효과</button>
+      <button class="lab-tab" data-exp="budget" role="tab" aria-selected="false">⑥ 예산 → 저감량</button>
     </div>
 
     <p class="lab-method" id="labMethod"></p>
@@ -3134,7 +3136,7 @@ function(t){t.__bidiEngine__=t.prototype.__bidiEngine__=function(t){var r,n,i,a,
     // AI optimization result
     heading("AI 배치 최적화");
     if (lastOptimizeResult) {
-      row("평균기온 (전 → 후)", lastOptimizeResult.before.toFixed(1) + " → " + lastOptimizeResult.after.toFixed(1) + " ℃",
+      row("배치 최적화 (전 → 후)", lastOptimizeResult.before.toFixed(2) + " → " + lastOptimizeResult.after.toFixed(2) + " ℃",
         lastOptimizeResult.improved > 0.02 ? "#0ca30c" : "#55594c");
       if (lastOptimizeResult.improved > 0.02) {
         row("개선폭", "−" + lastOptimizeResult.improved.toFixed(2) + " ℃");
@@ -4215,6 +4217,66 @@ function(t){t.__bidiEngine__=t.prototype.__bidiEngine__=function(t){var r,n,i,a,
       }
     },
 
+    budget: {
+      title: "예산에 따른 열섬 저감량 (AI 종합 설계)",
+      xLabel: "투입 예산 (점)",
+      yLabel: "기존 시가지 평균기온 (℃)",
+      xHeader: "예산(점)",
+      mode: "line",
+      usesReps: true,
+      method: "<b>조작변인</b> 투입 예산(0점→240점) · <b>종속변인</b> 기존 시가지 평균기온 · <b>통제변인</b> 도시 배치, 대책별 단가, 시간대, 바람, 열원 계수. 예산마다 <b>AI 종합 설계를 처음부터 다시 돌려</b> 그 예산에서 낼 수 있는 최선의 조합을 찾습니다. 담금질은 확률적 탐색이라 같은 예산이라도 결과가 조금씩 달라지므로, 반복 횟수만큼 다시 돌려 평균±표준편차를 냅니다(속도를 위해 화면 버튼보다 짧은 탐색을 씁니다).",
+      // the range has to run past the point where the cheap surface treatments
+      // are exhausted, otherwise the curve is a straight line and the whole
+      // point of the experiment (diminishing returns) never shows up
+      steps: function(){ return [0, 40, 80, 120, 180, 240, 320, 420, 540]; },
+      label: function(v){ return String(v); },
+      prepare: function(){
+        var base = grid.slice();
+        var sets = planningSets(base);
+        if (sets.eligible.length < 5) {
+          return { error: "손댈 수 있는 칸(건물·도로·빈터)이 5칸도 안 됩니다. 먼저 도시를 그린 뒤 다시 실행해 주세요." };
+        }
+        return { base: base, sets: sets, baseAvg: avgOverIndices(computeTemps(base), sets.scoreIdx) };
+      },
+      repsFor: function(v, reps){ return v === 0 ? 1 : Math.max(1, Math.min(3, reps)); },
+      run: function(v, ctxObj){
+        if (v === 0) return AMBIENT + ctxObj.baseAvg;
+        var planner = makePlanner(ctxObj.base, ctxObj.sets, v, 420);
+        planner.run(420);
+        return AMBIENT + planner.bestAvg;
+      },
+      conclude: function(res){
+        var first = res.points[0], last = res.points[res.points.length - 1];
+        // marginal return of the last budget step, compared with the first one
+        var p1 = res.points[1], p2 = res.points[2];
+        var early = p1 && p2 ? (p1.mean - p2.mean) / (p2.x - p1.x) : null;
+        var lateA = res.points[res.points.length - 2];
+        var late = lateA ? (lateA.mean - last.mean) / (last.x - lateA.x) : null;
+        var txt = "예산을 " + first.label + "점에서 " + last.label + "점까지 늘리면 기존 시가지 평균기온이 <b>" +
+          first.mean.toFixed(2) + "℃ → " + last.mean.toFixed(2) + "℃</b>로 <b>" +
+          (first.mean - last.mean).toFixed(2) + "℃</b> 낮아집니다.";
+        if (early != null && late != null && early > 0) {
+          var ratio = late / early;
+          txt += " 예산 1점이 주는 효과는 초반 구간에서 100점당 약 <b>" + (early * 100).toFixed(2) +
+            "℃</b>, 마지막 구간에서 100점당 약 <b>" + (late * 100).toFixed(2) + "℃</b>입니다";
+          if (ratio < 0.8) {
+            txt += " — 효율이 <b>" + (ratio * 100).toFixed(0) + "% 수준으로 떨어지는 수확체감</b>이 나타납니다." +
+              " 값싼 표면 대책(쿨루프·차열포장)을 먼저 다 쓰고 나면 남는 예산이 단가 높은 녹지 조성으로 넘어가기 때문입니다." +
+              " 곡선이 꺾이는 지점이 <b>가성비가 가장 좋은 예산 규모</b>입니다.";
+          } else {
+            txt += " — 이 범위에서는 효율이 아직 <b>" + (ratio * 100).toFixed(0) +
+              "% 수준으로 유지</b>됩니다. 값싼 표면 대책을 적용할 여지가 남아 있다는 뜻이니, 예산 범위를 더 넓혀 곡선이 꺾이는 지점을 찾아보세요.";
+          }
+        }
+        return txt;
+      },
+      brief: function(res){
+        var first = res.points[0], last = res.points[res.points.length - 1];
+        return "AI 종합 설계에 예산 " + last.label + "점을 쓰면 기존 시가지 평균기온이 " +
+          (first.mean - last.mean).toFixed(2) + "℃ 내려가지만, 예산 1점당 효과는 갈수록 줄어드는 수확체감을 보인다.";
+      }
+    },
+
     measure: {
       title: "같은 면적을 투입했을 때 열섬 저감 대책별 효과",
       xLabel: "저감 대책",
@@ -4374,8 +4436,8 @@ function(t){t.__bidiEngine__=t.prototype.__bidiEngine__=function(t){var r,n,i,a,
   // every experiment the student has finished, keyed by id, so the PDF report
   // can carry all of them rather than only whichever tab was open last
   var labResults = {};
-  var LAB_ORDER = ["green", "hour", "wind", "shape", "measure"];
-  var LAB_NUMERAL = { green: "①", hour: "②", wind: "③", shape: "④", measure: "⑤" };
+  var LAB_ORDER = ["green", "hour", "wind", "shape", "measure", "budget"];
+  var LAB_NUMERAL = { green: "①", hour: "②", wind: "③", shape: "④", measure: "⑤", budget: "⑥" };
   var labRunning = false;
 
   var LAB_LIGHT_PALETTE = {
@@ -5053,17 +5115,151 @@ function(t){t.__bidiEngine__=t.prototype.__bidiEngine__=function(t){var r,n,i,a,
   }
   function pick(arr) { return arr[Math.floor(Math.random() * arr.length)]; }
 
+  function planningSets(base) {
+    var scoreIdx = [], eligible = [];
+    for (var i = 0; i < base.length; i++) {
+      if (MATERIALS[base[i]].occupied) scoreIdx.push(i);
+      if (treatmentsFor(base[i])) eligible.push(i);
+    }
+    return { scoreIdx: scoreIdx, eligible: eligible };
+  }
+
+  // One search, driven in slices. The on-screen button steps it a few moves per
+  // frame so the sparkline animates; the budget-sweep experiment steps it to
+  // completion in one call. Keeping a single implementation means the graph and
+  // the button can never quietly disagree about what the AI would choose.
+  function makePlanner(base, sets, budget, totalSteps) {
+    var scoreIdx = sets.scoreIdx, eligible = sets.eligible;
+    var assigned = {}, spent = 0;
+
+    function evaluate() {
+      var g = base.slice();
+      for (var c in assigned) g[c] = assigned[c];
+      return avgOverIndices(computeTemps(g), scoreIdx);
+    }
+    function randomFree() {
+      // eligible is at most a few hundred cells, so rejection sampling finds an
+      // unassigned one immediately unless the plan already covers nearly all
+      for (var tries = 0; tries < 24; tries++) {
+        var c = eligible[Math.floor(Math.random() * eligible.length)];
+        if (assigned[c] === undefined) return c;
+      }
+      return -1;
+    }
+
+    // feasible start: cheapest option for each surface, on random cells
+    while (true) {
+      var c0 = randomFree();
+      if (c0 < 0) break;
+      var k0 = treatmentsFor(base[c0])[0];
+      if (spent + costOf(base[c0], k0) > budget) break;
+      assigned[c0] = k0;
+      spent += costOf(base[c0], k0);
+    }
+
+    var currentAvg = evaluate();
+    var best = Object.assign({}, assigned), bestAvg = currentAvg, bestSpent = spent;
+
+    // measure the objective's move scale so the annealing temperature is on the
+    // same order as the deltas it has to judge (same reasoning as annealParks)
+    var probe = 0, probes = 0;
+    var startCells = Object.keys(assigned);
+    for (var s0 = 0; s0 < 10 && startCells.length; s0++) {
+      var pc = startCells[Math.floor(Math.random() * startCells.length)];
+      var savedKind = assigned[pc];
+      delete assigned[pc];
+      probe += Math.abs(evaluate() - currentAvg);
+      probes++;
+      assigned[pc] = savedKind;
+    }
+    var sched = annealSchedule(Math.max(1e-4, probes ? probe / probes : 0.02), totalSteps);
+    var T = sched.T0;
+    var history = [currentAvg];
+    var step = 0;
+
+    // Every move is proposed, costed, and only then evaluated; an over-budget
+    // proposal is rolled back without paying for a diffusion solve.
+    function proposeMove() {
+      var roll = Math.random();
+      var cells = Object.keys(assigned);
+      if (roll < 0.35 || !cells.length) {
+        var addCell = randomFree();
+        if (addCell < 0) return null;
+        var addKind = pick(treatmentsFor(base[addCell]));
+        var addCost = costOf(base[addCell], addKind);
+        if (spent + addCost > budget) return null;
+        assigned[addCell] = addKind; spent += addCost;
+        return function undo(){ delete assigned[addCell]; spent -= addCost; };
+      }
+      var cell = +cells[Math.floor(Math.random() * cells.length)];
+      var oldKind = assigned[cell];
+      var oldCost = costOf(base[cell], oldKind);
+      if (roll < 0.5) { // remove
+        delete assigned[cell]; spent -= oldCost;
+        return function undo(){ assigned[cell] = oldKind; spent += oldCost; };
+      }
+      if (roll < 0.72) { // swap treatment on the same cell
+        var alt = pick(treatmentsFor(base[cell]));
+        var altCost = costOf(base[cell], alt);
+        if (alt === oldKind || spent - oldCost + altCost > budget) return null;
+        assigned[cell] = alt; spent += altCost - oldCost;
+        return function undo(){ assigned[cell] = oldKind; spent += oldCost - altCost; };
+      }
+      var dest = randomFree(); // relocate
+      if (dest < 0) return null;
+      var destKind = pick(treatmentsFor(base[dest]));
+      var destCost = costOf(base[dest], destKind);
+      if (spent - oldCost + destCost > budget) return null;
+      delete assigned[cell];
+      assigned[dest] = destKind;
+      spent += destCost - oldCost;
+      return function undo(){
+        delete assigned[dest];
+        assigned[cell] = oldKind;
+        spent += oldCost - destCost;
+      };
+    }
+
+    return {
+      history: history,
+      get step(){ return step; },
+      get done(){ return step >= totalSteps; },
+      get best(){ return best; },
+      get bestAvg(){ return bestAvg; },
+      get bestSpent(){ return bestSpent; },
+      run: function(n) {
+        var did = 0;
+        while (did < n && step < totalSteps) {
+          var undo = proposeMove();
+          step++; did++;
+          T *= sched.cooling;
+          if (!undo) { history.push(currentAvg); continue; }
+          var avg = evaluate();
+          var delta = avg - currentAvg;
+          if (delta < 0 || Math.random() < Math.exp(-delta / T)) {
+            currentAvg = avg;
+            if (avg < bestAvg) {
+              bestAvg = avg;
+              best = Object.assign({}, assigned);
+              bestSpent = spent;
+            }
+          } else {
+            undo();
+          }
+          history.push(currentAvg);
+        }
+        return step;
+      }
+    };
+  }
+
   document.getElementById("btnPlan").addEventListener("click", function(){
     if (plannerRunning || optimizing) return;
     var resultEl = document.getElementById("plannerResult");
     var base = grid.slice();
+    var sets = planningSets(base);
 
-    var scoreIdx = [], eligible = [];
-    for (var i = 0; i < N; i++) {
-      if (MATERIALS[base[i]].occupied) scoreIdx.push(i);
-      if (treatmentsFor(base[i])) eligible.push(i);
-    }
-    if (eligible.length < 2) {
+    if (sets.eligible.length < 2) {
       resultEl.style.display = "block";
       resultEl.innerHTML = "<span style=\"color:var(--ink-mute)\">손댈 수 있는 칸(건물·도로·빈터)이 없습니다. 먼저 도시를 그려주세요.</span>";
       return;
@@ -5079,131 +5275,16 @@ function(t){t.__bidiEngine__=t.prototype.__bidiEngine__=function(t){var r,n,i,a,
     resultEl.style.display = "none";
     chartStatus.textContent = "종합 설계 탐색 중…";
 
-    // plan state: cell index -> treatment, plus a running cost
-    var assigned = {};
-    var spent = 0;
-    function planCells() { return Object.keys(assigned).map(Number); }
-    function evaluate() {
-      var g = base.slice();
-      for (var c in assigned) g[c] = assigned[c];
-      return avgOverIndices(computeTemps(g), scoreIdx);
-    }
-    function randomEligible() {
-      return eligible[Math.floor(Math.random() * eligible.length)];
-    }
-    function randomFree() {
-      // eligible is at most a few hundred cells, so rejection sampling finds an
-      // unassigned one immediately unless the plan already covers nearly all
-      for (var tries = 0; tries < 24; tries++) {
-        var c = randomEligible();
-        if (assigned[c] === undefined) return c;
-      }
-      return -1;
-    }
-
-    // greedy-ish feasible start: cheapest useful treatment on random cells
-    while (true) {
-      var c0 = randomFree();
-      if (c0 < 0) break;
-      var kinds0 = treatmentsFor(base[c0]);
-      var k0 = kinds0[0]; // the cheap option for that surface
-      if (spent + costOf(base[c0], k0) > budget) break;
-      assigned[c0] = k0;
-      spent += costOf(base[c0], k0);
-    }
-
-    var beforeAvg = avgOverIndices(computeTemps(base), scoreIdx);
+    var beforeAvg = avgOverIndices(computeTemps(base), sets.scoreIdx);
     var beforeSnapshot = snapshotGridCanvas(base, computeTemps(base));
-    var currentAvg = evaluate();
-    var best = Object.assign({}, assigned), bestAvg = currentAvg, bestSpent = spent;
-
-    // measure the objective's move scale so the annealing temperature is on the
-    // same order as the deltas it has to judge (same reasoning as annealParks)
-    var probe = 0, probes = 0;
-    var startCells = planCells();
-    for (var s0 = 0; s0 < 10 && startCells.length; s0++) {
-      var pc = startCells[Math.floor(Math.random() * startCells.length)];
-      var savedKind = assigned[pc];
-      delete assigned[pc];
-      probe += Math.abs(evaluate() - currentAvg);
-      probes++;
-      assigned[pc] = savedKind;
-    }
-    var totalSteps = 900;
-    var sched = annealSchedule(Math.max(1e-4, probes ? probe / probes : 0.02), totalSteps);
-    var T = sched.T0;
-    var history = [currentAvg];
-    var step = 0;
-
-    // Every move is proposed, costed, and only then evaluated; an over-budget
-    // proposal is rolled back without paying for a diffusion solve.
-    function proposeMove() {
-      var roll = Math.random();
-      var cells = planCells();
-      if (roll < 0.35 || !cells.length) {
-        var addCell = randomFree();
-        if (addCell < 0) return null;
-        var addKind = pick(treatmentsFor(base[addCell]));
-        var addCost = costOf(base[addCell], addKind);
-        if (spent + addCost > budget) return null;
-        assigned[addCell] = addKind; spent += addCost;
-        return function undo(){ delete assigned[addCell]; spent -= addCost; };
-      }
-      var cell = cells[Math.floor(Math.random() * cells.length)];
-      var oldKind = assigned[cell];
-      var oldCost = costOf(base[cell], oldKind);
-      if (roll < 0.5) { // remove
-        delete assigned[cell]; spent -= oldCost;
-        return function undo(){ assigned[cell] = oldKind; spent += oldCost; };
-      }
-      if (roll < 0.72) { // swap treatment on the same cell
-        var alt = pick(treatmentsFor(base[cell]));
-        var altCost = costOf(base[cell], alt);
-        if (alt === oldKind || spent - oldCost + altCost > budget) return null;
-        assigned[cell] = alt; spent += altCost - oldCost;
-        return function undo(){ assigned[cell] = oldKind; spent += oldCost - altCost; };
-      }
-      // relocate to another cell
-      var dest = randomFree();
-      if (dest < 0) return null;
-      var destKind = pick(treatmentsFor(base[dest]));
-      var destCost = costOf(base[dest], destKind);
-      if (spent - oldCost + destCost > budget) return null;
-      delete assigned[cell];
-      assigned[dest] = destKind;
-      spent += destCost - oldCost;
-      return function undo(){
-        delete assigned[dest];
-        assigned[cell] = oldKind;
-        spent += oldCost - destCost;
-      };
-    }
+    var TOTAL = 900;
+    var planner = makePlanner(base, sets, budget, TOTAL);
 
     function tick() {
-      var did = 0;
-      var perTick = document.hidden ? 90 : 16;
-      while (did < perTick && step < totalSteps) {
-        var undo = proposeMove();
-        step++; did++;
-        if (!undo) { history.push(currentAvg); T *= sched.cooling; continue; }
-        var avg = evaluate();
-        var delta = avg - currentAvg;
-        if (delta < 0 || Math.random() < Math.exp(-delta / T)) {
-          currentAvg = avg;
-          if (avg < bestAvg) {
-            bestAvg = avg;
-            best = Object.assign({}, assigned);
-            bestSpent = spent;
-          }
-        } else {
-          undo();
-        }
-        T *= sched.cooling;
-        history.push(currentAvg);
-      }
-      drawSpark(history);
-      chartStatus.textContent = "종합 설계 탐색 중 (" + step + "/" + totalSteps + ")";
-      if (step < totalSteps) scheduleOptimizeTick(tick);
+      planner.run(document.hidden ? 90 : 16);
+      drawSpark(planner.history);
+      chartStatus.textContent = "종합 설계 탐색 중 (" + planner.step + "/" + TOTAL + ")";
+      if (!planner.done) scheduleOptimizeTick(tick);
       else finish();
     }
 
@@ -5211,6 +5292,7 @@ function(t){t.__bidiEngine__=t.prototype.__bidiEngine__=function(t){var r,n,i,a,
       var counts = { park: 0, coolroof: 0, coolpave: 0 };
       var out = base.slice();
       var touched = [];
+      var best = planner.best;
       Object.keys(best).forEach(function(c){
         out[c] = best[c];
         counts[best[c]]++;
@@ -5223,6 +5305,7 @@ function(t){t.__bidiEngine__=t.prototype.__bidiEngine__=function(t){var r,n,i,a,
       touched.forEach(function(m){ cellEls[m].classList.add("moved"); });
       setTimeout(function(){ cellEls.forEach(function(el){ el.classList.remove("moved"); }); }, 1200);
 
+      var bestAvg = planner.bestAvg;
       var improved = beforeAvg - bestAvg;
       chartStatus.textContent = "완료";
       resultEl.style.display = "block";
@@ -5230,13 +5313,13 @@ function(t){t.__bidiEngine__=t.prototype.__bidiEngine__=function(t){var r,n,i,a,
         "<div class=\"plan-delta\">" + (AMBIENT + beforeAvg).toFixed(2) + "℃ → <b>" + (AMBIENT + bestAvg).toFixed(2) +
         "℃</b> <span class=\"good\">−" + improved.toFixed(2) + "℃</span></div>" +
         "<div class=\"plan-mix\">AI가 고른 조합 · 녹지 <b>" + counts.park + "</b>칸 · 쿨루프 <b>" + counts.coolroof +
-        "</b>칸 · 차열포장 <b>" + counts.coolpave + "</b>칸 · 사용 예산 <b>" + bestSpent + "</b>/" + budget + "점</div>" +
-        "<p class=\"science-note\">기존 시가지 " + scoreIdx.length + "칸의 평균기온 기준입니다. 예산을 바꿔가며 여러 번 돌리면 <b>예산 대비 저감량 곡선</b>을 직접 그려볼 수 있어요. 확률적 탐색이라 실행할 때마다 조합이 조금씩 달라집니다. 되돌리기로 이전 도시로 돌아갈 수 있습니다.</p>";
+        "</b>칸 · 차열포장 <b>" + counts.coolpave + "</b>칸 · 사용 예산 <b>" + planner.bestSpent + "</b>/" + budget + "점</div>" +
+        "<p class=\"science-note\">기존 시가지 " + sets.scoreIdx.length + "칸의 평균기온 기준입니다. 예산별 저감량 곡선은 아래 <b>탐구 실험실 ⑥</b>에서 한 번에 그릴 수 있어요. 확률적 탐색이라 실행할 때마다 조합이 조금씩 달라집니다. 되돌리기로 이전 도시로 돌아갈 수 있습니다.</p>";
 
       showComparisonImage(beforeSnapshot, snapshotGridCanvas(out, computeTemps(out)), AMBIENT + beforeAvg, AMBIENT + bestAvg);
       lastPlanResult = {
         before: AMBIENT + beforeAvg, after: AMBIENT + bestAvg, improved: improved,
-        budget: budget, spent: bestSpent, counts: counts, scored: scoreIdx.length
+        budget: budget, spent: planner.bestSpent, counts: counts, scored: sets.scoreIdx.length
       };
       plannerRunning = false;
       btn.disabled = false;
