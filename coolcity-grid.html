@@ -832,7 +832,8 @@
       <li>브러시로 도시를 직접 칠하거나, <b>서울·부산·제주</b> 버튼으로 실제 통계 기반 도시를 만들어보세요</li>
       <li><b>AI 최적화 실행</b>으로 녹지를 어디에 배치하면 열섬이 가장 줄어드는지 찾아보세요</li>
       <li><b>3D 도시 생성</b>으로 입체 화면을 확인해보세요 (시간대·바람도 반영됩니다)</li>
-      <li>실측 온도가 있다면 <b>계수 보정</b>으로 정확도를 높이고, <b>탐구 요약 카드</b>로 결과보고서용 이미지를 만드세요</li>
+      <li>실측 온도가 있다면 <b>계수 보정</b>으로 정확도를 높이고, 아래 <b>탐구 실험실</b>에서 변인을 하나씩 바꿔가며 그래프를 뽑아보세요</li>
+      <li>마우스가 없어도 됩니다 — 격자에서 <b>방향키</b>로 이동, <b>스페이스</b>로 칠하기, <b>숫자키 1~5</b>로 브러시 전환, <b>Ctrl+Z</b>로 되돌리기</li>
     </ol>
   </div>
 
@@ -842,7 +843,7 @@
     <section class="panel">
       <div class="panel-title">
         <h2>도시 설계 캔버스</h2>
-        <span class="hint" id="canvasHint">클릭 후 드래그해서 칠하세요</span>
+        <span class="hint" id="canvasHint">클릭 후 드래그, 또는 방향키+스페이스</span>
       </div>
 
       <div class="toolbar" role="group" aria-label="브러시 선택">
@@ -857,6 +858,8 @@
         <button class="btn" id="btnRandom">무작위 도시 생성</button>
         <button class="btn" id="btnImport">배치도 이미지 불러오기</button>
         <button class="btn" id="btnClear">모두 지우기</button>
+        <button class="btn" id="btnUndo" title="되돌리기 (Ctrl+Z)" disabled>↩ 되돌리기</button>
+        <button class="btn" id="btnRedo" title="다시 실행 (Ctrl+Shift+Z)" disabled>↪ 다시 실행</button>
         <button class="btn btn-primary" id="btnOptimize">AI 최적화 실행 →</button>
         <input type="file" id="imageInput" accept="image/*" style="display:none">
       </div>
@@ -879,7 +882,7 @@
 
       <div class="gridwrap">
         <div class="view-pane active" id="paneFlat">
-          <div class="cell-grid" id="cellGrid" aria-label="18×18 도시 격자, 셀 색은 예상 지표 온도를 나타냄"></div>
+          <div class="cell-grid" id="cellGrid" role="grid" aria-label="18×18 도시 격자, 방향키로 이동하고 스페이스로 칠합니다. 셀 색은 예상 지표 온도를 나타냅니다."></div>
         </div>
 
         <div class="view-pane" id="paneIso">
@@ -969,7 +972,7 @@
       <div class="chart-wrap">
         <div class="chart-caption">
           <span>최적화 진행: 평균기온 변화</span>
-          <span id="chartStatus">대기 중</span>
+          <span id="chartStatus" role="status" aria-live="polite">대기 중</span>
         </div>
         <svg class="spark" id="sparkChart" viewBox="0 0 280 64" preserveAspectRatio="none">
           <line class="baseline" x1="0" y1="32" x2="280" y2="32"></line>
@@ -1076,7 +1079,7 @@
     <div class="lab-run">
       <label class="lab-reps">반복 <input type="number" id="labReps" min="1" max="30" step="1" value="6"> 회</label>
       <button class="btn btn-primary" id="btnRunExp">실험 실행 →</button>
-      <span class="lab-status" id="labStatus">대기 중</span>
+      <span class="lab-status" id="labStatus" role="status" aria-live="polite">대기 중</span>
     </div>
 
     <div class="lab-body">
@@ -1694,13 +1697,59 @@ function(t){t.__bidiEngine__=t.prototype.__bidiEngine__=function(t){var r,n,i,a,
     var c = document.createElement("div");
     c.className = "cell";
     c.dataset.i = i0;
-    c.tabIndex = -1;
+    c.setAttribute("role", "gridcell");
+    // roving tabindex: exactly one cell is in the tab order at a time, so Tab
+    // steps past the whole grid instead of through 324 stops
+    c.tabIndex = i0 === 0 ? 0 : -1;
     var val = document.createElement("span");
     val.className = "val";
     c.appendChild(val);
     gridEl.appendChild(c);
     cellEls.push(c);
   }
+
+  // ---- undo / redo ----
+  // Snapshots are whole 324-cell grids rather than per-cell diffs: at this size
+  // a snapshot is a few kilobytes, and the operations that need undoing most
+  // (무작위 생성, 모두 지우기, 이미지 불러오기, AI 최적화) rewrite the entire
+  // grid anyway, so a diff log would buy nothing.
+  var GRID_HISTORY_MAX = 40;
+  var gridHistory = [];
+  var gridHistoryIdx = -1;
+  var btnUndo = document.getElementById("btnUndo");
+  var btnRedo = document.getElementById("btnRedo");
+
+  function sameGrid(a, b) {
+    if (!a || !b || a.length !== b.length) return false;
+    for (var i = 0; i < a.length; i++) if (a[i] !== b[i]) return false;
+    return true;
+  }
+  function updateUndoButtons() {
+    btnUndo.disabled = gridHistoryIdx <= 0;
+    btnRedo.disabled = gridHistoryIdx >= gridHistory.length - 1;
+  }
+  // Called liberally (stroke end, key release, after every whole-grid action).
+  // It is a no-op unless the grid actually differs from the last snapshot, so
+  // over-calling it costs one comparison and never pollutes the history.
+  function commitGridChange() {
+    if (sameGrid(grid, gridHistory[gridHistoryIdx])) return;
+    gridHistory = gridHistory.slice(0, gridHistoryIdx + 1);
+    gridHistory.push(grid.slice());
+    if (gridHistory.length > GRID_HISTORY_MAX) gridHistory.shift();
+    gridHistoryIdx = gridHistory.length - 1;
+    updateUndoButtons();
+  }
+  function travelHistory(delta) {
+    var target = gridHistoryIdx + delta;
+    if (target < 0 || target >= gridHistory.length) return;
+    gridHistoryIdx = target;
+    grid = gridHistory[target].slice();
+    clearCityPresetUI();
+    render();
+    updateUndoButtons();
+  }
+  btnUndo.addEventListener("click", function(){ travelHistory(-1); });
+  btnRedo.addEventListener("click", function(){ travelHistory(1); });
 
   var painting = false;
   function paintAt(i) {
@@ -1712,6 +1761,7 @@ function(t){t.__bidiEngine__=t.prototype.__bidiEngine__=function(t){var r,n,i,a,
     var cell = e.target.closest(".cell");
     if (!cell) return;
     painting = true;
+    setFocusCell(+cell.dataset.i, false);
     paintAt(+cell.dataset.i);
     e.preventDefault();
   });
@@ -1721,16 +1771,90 @@ function(t){t.__bidiEngine__=t.prototype.__bidiEngine__=function(t){var r,n,i,a,
     var cell = el && el.closest(".cell");
     if (cell) paintAt(+cell.dataset.i);
   });
-  window.addEventListener("pointerup", function(){ painting = false; });
+  window.addEventListener("pointerup", function(){
+    if (painting) { painting = false; commitGridChange(); }
+  });
+
+  // ---- keyboard operation of the grid ----
+  // The grid is the whole point of the tool, so it has to be usable without a
+  // pointer: arrows move a roving focus, space/enter paints, and holding shift
+  // while arrowing paints a stroke the way dragging does.
+  var focusIdx = 0;
+  function setFocusCell(i, moveFocus) {
+    if (i < 0 || i >= N) return;
+    cellEls[focusIdx].tabIndex = -1;
+    focusIdx = i;
+    cellEls[focusIdx].tabIndex = 0;
+    if (moveFocus !== false) cellEls[focusIdx].focus();
+  }
+  function describeCell(i) {
+    return (Math.floor(i / SIZE) + 1) + "행 " + (i % SIZE + 1) + "열, " +
+      MATERIAL_LABEL[grid[i]] + ", " + (24 + temps[i]).toFixed(1) + "도";
+  }
+  var BRUSH_KEYS = ["building", "road", "park", "water", "grass"];
+  gridEl.addEventListener("keydown", function(e){
+    var x = focusIdx % SIZE, y = Math.floor(focusIdx / SIZE);
+    var moved = -1;
+    switch (e.key) {
+      case "ArrowLeft":  moved = y * SIZE + Math.max(0, x - 1); break;
+      case "ArrowRight": moved = y * SIZE + Math.min(SIZE - 1, x + 1); break;
+      case "ArrowUp":    moved = Math.max(0, y - 1) * SIZE + x; break;
+      case "ArrowDown":  moved = Math.min(SIZE - 1, y + 1) * SIZE + x; break;
+      case "Home":       moved = y * SIZE; break;
+      case "End":        moved = y * SIZE + SIZE - 1; break;
+      case " ":
+      case "Enter":
+        paintAt(focusIdx);
+        cellEls[focusIdx].setAttribute("aria-label", describeCell(focusIdx));
+        e.preventDefault();
+        return;
+      default:
+        if (e.key >= "1" && e.key <= "5") {
+          selectBrush(BRUSH_KEYS[+e.key - 1]);
+          e.preventDefault();
+        }
+        return;
+    }
+    if (moved >= 0) {
+      setFocusCell(moved);
+      if (e.shiftKey) paintAt(moved);
+      cellEls[moved].setAttribute("aria-label", describeCell(moved));
+      e.preventDefault();
+    }
+  });
+  gridEl.addEventListener("keyup", function(e){
+    if (e.key === "Shift" || e.key === " " || e.key === "Enter") commitGridChange();
+  });
+  gridEl.addEventListener("focusin", function(e){
+    var cell = e.target.closest(".cell");
+    if (cell) {
+      var i = +cell.dataset.i;
+      cell.setAttribute("aria-label", describeCell(i));
+      if (i !== focusIdx) setFocusCell(i, false);
+    }
+  });
+
+  // Ctrl+Z / Ctrl+Shift+Z / Ctrl+Y anywhere except inside a text field, where
+  // the browser's own undo should keep working.
+  document.addEventListener("keydown", function(e){
+    if (!(e.ctrlKey || e.metaKey)) return;
+    var t = e.target;
+    if (t && (t.tagName === "INPUT" || t.tagName === "TEXTAREA" || t.isContentEditable)) return;
+    var k = e.key.toLowerCase();
+    if (k === "z" && !e.shiftKey) { travelHistory(-1); e.preventDefault(); }
+    else if ((k === "z" && e.shiftKey) || k === "y") { travelHistory(1); e.preventDefault(); }
+  });
 
   // ---- brush toolbar ----
   var brushBtns = document.querySelectorAll(".brush");
-  brushBtns.forEach(function(btn){
-    btn.addEventListener("click", function(){
-      brushBtns.forEach(function(b){ b.setAttribute("aria-pressed","false"); });
-      btn.setAttribute("aria-pressed","true");
-      currentBrush = btn.dataset.type;
+  function selectBrush(type) {
+    currentBrush = type;
+    brushBtns.forEach(function(b){
+      b.setAttribute("aria-pressed", b.dataset.type === type ? "true" : "false");
     });
+  }
+  brushBtns.forEach(function(btn){
+    btn.addEventListener("click", function(){ selectBrush(btn.dataset.type); });
   });
 
   var showNums = false;
@@ -2210,7 +2334,7 @@ function(t){t.__bidiEngine__=t.prototype.__bidiEngine__=function(t){var r,n,i,a,
     paneIso.classList.toggle("active", !isFlat);
     tabFlat.setAttribute("aria-selected", isFlat ? "true" : "false");
     tabIso.setAttribute("aria-selected", isFlat ? "false" : "true");
-    canvasHint.textContent = isFlat ? "클릭 후 드래그해서 칠하세요" : "회전 버튼으로 각도를 바꿔보세요";
+    canvasHint.textContent = isFlat ? "클릭 후 드래그, 또는 방향키+스페이스" : "회전 버튼으로 각도를 바꿔보세요";
     toggleNumsRow.style.display = isFlat ? "flex" : "none";
     if (isFlat) {
       stopIsoAnim();
@@ -2257,11 +2381,12 @@ function(t){t.__bidiEngine__=t.prototype.__bidiEngine__=function(t){var r,n,i,a,
     document.getElementById("cityInfo").style.display = "none";
     document.querySelectorAll(".citybtn").forEach(function(b){ b.setAttribute("aria-pressed", "false"); });
   }
-  document.getElementById("btnRandom").addEventListener("click", function(){ clearCityPresetUI(); randomCity(); });
+  document.getElementById("btnRandom").addEventListener("click", function(){ clearCityPresetUI(); randomCity(); commitGridChange(); });
   document.getElementById("btnClear").addEventListener("click", function(){
     clearCityPresetUI();
     grid = new Array(N).fill("grass");
     render();
+    commitGridChange();
   });
 
   // ---- real-city presets ----
@@ -2324,7 +2449,7 @@ function(t){t.__bidiEngine__=t.prototype.__bidiEngine__=function(t){var r,n,i,a,
   }
 
   document.querySelectorAll(".citybtn").forEach(function(btn){
-    btn.addEventListener("click", function(){ generateCityPreset(btn.dataset.city); });
+    btn.addEventListener("click", function(){ generateCityPreset(btn.dataset.city); commitGridChange(); });
   });
 
   // ---- import from satellite / site-plan image ----
@@ -2426,6 +2551,7 @@ function(t){t.__bidiEngine__=t.prototype.__bidiEngine__=function(t){var r,n,i,a,
       URL.revokeObjectURL(url);
       selectView("flat");
       render();
+      commitGridChange();
       importNote.style.display = "block";
       importNote.textContent = "이미지에서 색상 기반으로 자동 분류했습니다(건물/도로 구분은 밝기 추정이라 오차가 있을 수 있어요) — 브러시로 직접 확인하고 수정해 주세요.";
     };
@@ -3254,6 +3380,7 @@ function(t){t.__bidiEngine__=t.prototype.__bidiEngine__=function(t){var r,n,i,a,
     function finish() {
       grid = best;
       render();
+      commitGridChange();
       // flash park cells in the final layout briefly to show where they landed
       for (var m = 0; m < N; m++) {
         if (best[m] === "park") {
@@ -4122,7 +4249,8 @@ function(t){t.__bidiEngine__=t.prototype.__bidiEngine__=function(t){var r,n,i,a,
 
   // ---- init ----
   refreshHeatStops();
-  if (loadState()) {
+  var restored = loadState();
+  if (restored) {
     document.getElementById("hourSlider").value = hourOfDay;
     document.getElementById("windDir").value = windDir;
     document.getElementById("windStrength").value = Math.round(windStrength * 100);
@@ -4134,5 +4262,6 @@ function(t){t.__bidiEngine__=t.prototype.__bidiEngine__=function(t){var r,n,i,a,
   } else {
     randomCity();
   }
+  commitGridChange();
 })();
 </script>
