@@ -264,6 +264,20 @@
     padding:8px 10px;
   }
 
+  .import-mode{
+    display:flex; align-items:center; gap:8px; flex-wrap:wrap;
+    margin:-6px 0 12px;
+  }
+  .import-mode label{
+    display:flex; align-items:center; gap:6px;
+    font-size:11.5px; color:var(--ink-mute);
+  }
+  .import-mode select{
+    padding:6px 8px; border:1px solid var(--line); border-radius:7px;
+    background:var(--panel-2); color:var(--ink);
+    font:600 11.5px "Gothic A1",sans-serif;
+  }
+
   .city-row{
     display:flex;
     align-items:center;
@@ -1055,6 +1069,15 @@
         <input type="file" id="imageInput" accept="image/*" style="display:none">
       </div>
       <p class="import-note" id="importNote" style="display:none;"></p>
+      <div class="import-mode" id="importMode" style="display:none;">
+        <label>이미지 종류
+          <select id="importModeSel">
+            <option value="auto">자동 판별</option>
+            <option value="map">지도 캡처 — 도로가 흰색</option>
+            <option value="satellite">위성·항공 사진 — 도로가 어두움</option>
+          </select>
+        </label>
+      </div>
 
       <div class="city-row">
         <span class="city-label">실제 도시 통계로 생성</span>
@@ -2945,13 +2968,23 @@ function(t){t.__bidiEngine__=t.prototype.__bidiEngine__=function(t){var r,n,i,a,
     btn.addEventListener("click", function(){ generateCityPreset(btn.dataset.city); commitGridChange(); });
   });
 
-  // ---- import from satellite / site-plan image ----
-  // Per-cell classification uses the RATIO of pixel categories inside each
-  // cell, not one averaged color: a cell that is half road, half shadow would
-  // average to a color that matches neither, but ratios ("62% asphalt-gray")
-  // hold up. Thresholds are a starting point, not a trained classifier, so
-  // results are meant to be spot-checked and hand-corrected with the brushes
-  // above rather than trusted as ground truth.
+  // ---- import from a map screenshot or an aerial photo ----
+  // Per-cell classification uses the RATIO of pixel categories inside each cell,
+  // not one averaged colour: a cell that is half road and half shadow averages
+  // to a colour matching neither, but ratios ("62% asphalt") hold up.
+  //
+  // The important thing this has to get right is that THE SAME CUE MEANS
+  // OPPOSITE THINGS in the two kinds of image students actually paste. On a map
+  // screenshot roads are the brightest thing on screen (white ribbons) and
+  // buildings are mid-grey blocks; on an aerial photo roads are the darkest
+  // thing (asphalt) and roofs are often the brightest. A single brightness rule
+  // cannot serve both, so the medium is detected first and each medium gets its
+  // own rules. Thresholds are also taken from the image's own brightness
+  // distribution rather than fixed constants, so a dark or washed-out capture
+  // still classifies.
+  //
+  // This is a heuristic, not a trained model. It reports a confidence per cell
+  // and flags the doubtful ones so they can be hand-corrected with the brushes.
   function rgbToHsv(r, g, b) {
     r /= 255; g /= 255; b /= 255;
     var max = Math.max(r, g, b), min = Math.min(r, g, b);
@@ -2968,65 +3001,152 @@ function(t){t.__bidiEngine__=t.prototype.__bidiEngine__=function(t){var r,n,i,a,
     }
     return [h, s, v];
   }
-  function classifyPixel(r, g, b) {
-    var hsv = rgbToHsv(r, g, b), h = hsv[0], s = hsv[1], v = hsv[2];
-    if (h >= 70 && h <= 170 && s > 0.22 && v > 0.15) return "green";
-    if (h >= 175 && h <= 255 && s > 0.18) return "water";
-    if (s < 0.16 && v > 0.78) return "bright";
-    if (s < 0.22 && v < 0.4) return "darkGray";
-    if (s < 0.22) return "gray";
-    return "other";
+
+  // One coarse pass over the whole image: brightness percentiles (so thresholds
+  // adapt to the exposure), mean saturation, and a texture score -- the mean
+  // brightness step between neighbouring samples. Flat vector art scores low,
+  // photographed ground cover scores high, and that is what separates the media.
+  //
+  // Texture is reported RELATIVE to the image's own brightness spread, because
+  // the raw figure scales with exposure: dimming an aerial photo to 55% halves
+  // its texture and it starts looking as flat as a map. Dividing by (p92 - p20)
+  // cancels that exactly -- measured across the same image at three exposures,
+  // relTexture holds at 0.061 for map artwork and 0.20 for aerial, while the
+  // raw score slides from 0.089 down to 0.048 and crosses any fixed threshold.
+  function imageStats(data, w, h) {
+    var step = Math.max(1, Math.floor(Math.min(w, h) / 90));
+    var lums = [], satSum = 0, texSum = 0, texN = 0, n = 0;
+    for (var y = 0; y < h; y += step) {
+      var prev = -1;
+      for (var x = 0; x < w; x += step) {
+        var i = (y * w + x) * 4;
+        if (data[i + 3] < 10) { prev = -1; continue; }
+        var hsv = rgbToHsv(data[i], data[i + 1], data[i + 2]);
+        lums.push(hsv[2]);
+        satSum += hsv[1];
+        n++;
+        if (prev >= 0) { texSum += Math.abs(hsv[2] - prev); texN++; }
+        prev = hsv[2];
+      }
+    }
+    if (!n) return null;
+    lums.sort(function(a, b){ return a - b; });
+    function pct(p) { return lums[Math.min(lums.length - 1, Math.floor(lums.length * p))]; }
+    var texture = texN ? texSum / texN : 0;
+    var p20 = pct(0.20), p92 = pct(0.92);
+    return {
+      p20: p20, p40: pct(0.40), p60: pct(0.60), p80: pct(0.80), p92: p92,
+      satMean: satSum / n,
+      texture: texture,
+      relTexture: texture / Math.max(0.04, p92 - p20),
+      samples: n
+    };
+  }
+  var MAP_TEXTURE_MAX = 0.12; // measured: map artwork ~0.06, aerial ~0.20
+  function detectSourceMode(st) {
+    if (!st) return "map";
+    // flat vector artwork reads as a map; photographic grain reads as aerial
+    return st.relTexture < MAP_TEXTURE_MAX ? "map" : "satellite";
   }
 
-  function classifyGridFromImage(img) {
+  // Returns one of the grid types directly, or null for "nothing decisive".
+  function classifyPixel(r, g, b, st, mode) {
+    var hsv = rgbToHsv(r, g, b), hu = hsv[0], s = hsv[1], v = hsv[2];
+    // Map parks are drawn in a pale green to begin with, and brightening a
+    // capture compresses saturation further (every channel crowds toward 255),
+    // so this floor has to sit low. It is safe there because the hue band does
+    // the real work: a neutral grey has no hue in 65-175 at all.
+    if (hu >= 65 && hu <= 175 && s > 0.08 && v > 0.10) return "park";
+    if (hu >= 175 && hu <= 260 && s > 0.14) return "water";
+
+    if (mode === "map") {
+      // Map roads are the brightest, least saturated thing on the sheet. The
+      // band has to be defined RELATIVE to this image and nothing else: an
+      // absolute floor here (an earlier version used 0.82) throws away every
+      // road in an under-exposed capture, because "white" in a dim screenshot
+      // is only ~0.45. Requiring the band to also sit clear of the median keeps
+      // a uniformly pale image from reading as road everywhere.
+      var roadBand = Math.max(st.p92 - 0.02, st.p60 + 0.04);
+      if (s < 0.12 && v >= roadBand) return "road";
+      // some map styles draw major roads pale yellow or orange instead
+      if (hu >= 30 && hu <= 62 && s >= 0.12 && s <= 0.60 && v >= st.p80) return "road";
+      // everything else that is not near-black is a building block; the road
+      // tests above have already taken the bright end
+      if (s < 0.35 && v > st.p20 * 0.6) return "building";
+      return null;
+    }
+    // aerial: asphalt is the dark end of the range, roofs are everything else
+    if (s < 0.28 && v <= st.p40) return "road";
+    // Bare earth vs a tan rooftop is close to undecidable from colour alone in
+    // an aerial photo, and mistaking roofs for open ground is the worse error
+    // (it removes built-up area from the heat model). So this only fires on
+    // decisively earthy tones; anything merely warm-grey stays a building.
+    if (hu >= 20 && hu <= 48 && s >= 0.22 && s <= 0.55 && v > st.p40) return "grass";
+    if (v >= st.p20) return "building";
+    return null;
+  }
+
+  var lastImportImage = null;
+  var lastImportInfo = null;
+
+  function classifyGridFromImage(img, modeChoice) {
     var canvas = document.createElement("canvas");
     canvas.width = img.naturalWidth;
     canvas.height = img.naturalHeight;
     var ctx = canvas.getContext("2d");
     ctx.drawImage(img, 0, 0);
 
-    var cellW = img.naturalWidth / SIZE, cellH = img.naturalHeight / SIZE;
+    var full;
+    try {
+      full = ctx.getImageData(0, 0, canvas.width, canvas.height);
+    } catch (err) {
+      return null; // tainted canvas (cross-origin image)
+    }
+    var st = imageStats(full.data, canvas.width, canvas.height);
+    if (!st) return null;
+    var detected = detectSourceMode(st);
+    var mode = (modeChoice && modeChoice !== "auto") ? modeChoice : detected;
+
+    var cellW = canvas.width / SIZE, cellH = canvas.height / SIZE;
     var newGrid = new Array(N);
+    var unsure = [];
+    var tally = {};
 
     for (var cy = 0; cy < SIZE; cy++) {
       for (var cx = 0; cx < SIZE; cx++) {
         var x0 = Math.floor(cx * cellW), y0 = Math.floor(cy * cellH);
         var w = Math.max(1, Math.floor(cellW)), h = Math.max(1, Math.floor(cellH));
-        var data;
-        try {
-          data = ctx.getImageData(x0, y0, w, h).data;
-        } catch (err) {
-          newGrid[cy * SIZE + cx] = "grass";
-          continue;
-        }
         var stride = Math.max(1, Math.floor(Math.max(w, h) / 20));
-        var counts = { green: 0, water: 0, bright: 0, darkGray: 0, gray: 0, other: 0 };
+        var scores = { park: 0, water: 0, road: 0, building: 0, grass: 0 };
         var total = 0;
         for (var py = 0; py < h; py += stride) {
+          var rowBase = (y0 + py) * canvas.width;
           for (var px = 0; px < w; px += stride) {
-            var idx = (py * w + px) * 4;
-            if (data[idx + 3] < 10) continue; // transparent
-            var cat = classifyPixel(data[idx], data[idx + 1], data[idx + 2]);
-            counts[cat]++;
+            var idx = (rowBase + x0 + px) * 4;
+            if (full.data[idx + 3] < 10) continue;
             total++;
+            var cat = classifyPixel(full.data[idx], full.data[idx+1], full.data[idx+2], st, mode);
+            if (cat) scores[cat]++;
           }
         }
-        var type = "grass";
-        if (total > 0) {
-          var greenRatio = counts.green / total;
-          var waterRatio = counts.water / total;
-          var brightRatio = counts.bright / total;
-          var darkRatio = counts.darkGray / total;
-          var grayRatio = (counts.gray + counts.darkGray) / total;
-          if (greenRatio > 0.40) type = "park";
-          else if (waterRatio > 0.35) type = "water";
-          else if (grayRatio > 0.35) type = darkRatio / Math.max(0.001, grayRatio) > 0.5 ? "road" : "building";
-          else if (brightRatio > 0.5) type = "grass";
-          else type = "building";
-        }
-        newGrid[cy * SIZE + cx] = type;
+        var i2 = cy * SIZE + cx;
+        if (!total) { newGrid[i2] = "grass"; unsure.push(i2); continue; }
+
+        var best = "grass", bestV = 0, secondV = 0;
+        Object.keys(scores).forEach(function(k){
+          var v2 = scores[k] / total;
+          if (v2 > bestV) { secondV = bestV; bestV = v2; best = k; }
+          else if (v2 > secondV) { secondV = v2; }
+        });
+        // a cell nobody claimed, or one where the top two categories are neck
+        // and neck, is a guess -- say so rather than presenting it as a reading
+        if (bestV < 0.22) { best = "grass"; unsure.push(i2); }
+        else if (bestV - secondV < 0.12) { unsure.push(i2); }
+        newGrid[i2] = best;
+        tally[best] = (tally[best] || 0) + 1;
       }
     }
+    lastImportInfo = { mode: mode, detected: detected, unsure: unsure, tally: tally, stats: st };
     return newGrid;
   }
 
@@ -3034,26 +3154,63 @@ function(t){t.__bidiEngine__=t.prototype.__bidiEngine__=function(t){var r,n,i,a,
   document.getElementById("btnImport").addEventListener("click", function(){
     document.getElementById("imageInput").click();
   });
+  var MODE_LABEL = { map: "지도 캡처", satellite: "위성·항공 사진" };
+  // 로/으로 depends on whether the label ends in a consonant
+  var MODE_PARTICLE = { map: "로", satellite: "으로" };
+  function applyClassification(modeChoice) {
+    if (!lastImportImage) return;
+    var result = classifyGridFromImage(lastImportImage, modeChoice);
+    importNote.style.display = "block";
+    if (!result) {
+      importNote.textContent = "이미지를 읽을 수 없었습니다. 다른 파일로 다시 시도해 주세요.";
+      return;
+    }
+    grid = result;
+    selectView("flat");
+    render();
+    commitGridChange();
+
+    var info = lastImportInfo;
+    var parts = ["building", "road", "park", "water", "grass"]
+      .filter(function(k){ return info.tally[k]; })
+      .map(function(k){ return MATERIAL_LABEL[k] + " " + info.tally[k] + "칸"; });
+    var pct = Math.round(info.unsure.length / N * 100);
+    importNote.innerHTML =
+      "<b>" + MODE_LABEL[info.mode] + "</b>" + MODE_PARTICLE[info.mode] + " 보고 분류했습니다" +
+      (info.mode === info.detected ? "(자동 판별)" : "(직접 지정)") + ". 결과: " + parts.join(" · ") + "." +
+      (info.unsure.length
+        ? " 판단이 애매한 칸 <b>" + info.unsure.length + "개(" + pct + "%)</b>를 잠시 깜빡여 표시했습니다 — 그 칸부터 브러시로 고쳐 주세요."
+        : " 모든 칸이 뚜렷하게 분류됐지만, 그래도 눈으로 한 번 확인해 주세요.") +
+      " 종류가 잘못 잡혔으면 아래에서 바꾸고 다시 분류하세요.";
+
+    // flash the doubtful cells so the eye goes straight to what needs checking
+    info.unsure.forEach(function(i){ cellEls[i].classList.add("moved"); });
+    setTimeout(function(){ cellEls.forEach(function(el){ el.classList.remove("moved"); }); }, 2200);
+
+    document.getElementById("importMode").style.display = "flex";
+    document.getElementById("importModeSel").value = modeChoice || "auto";
+  }
+
   document.getElementById("imageInput").addEventListener("change", function(e){
     var file = e.target.files[0];
     if (!file) return;
     var url = URL.createObjectURL(file);
     var img = new Image();
     img.onload = function(){
-      grid = classifyGridFromImage(img);
+      lastImportImage = img;
       URL.revokeObjectURL(url);
-      selectView("flat");
-      render();
-      commitGridChange();
-      importNote.style.display = "block";
-      importNote.textContent = "이미지에서 색상 기반으로 자동 분류했습니다(건물/도로 구분은 밝기 추정이라 오차가 있을 수 있어요) — 브러시로 직접 확인하고 수정해 주세요.";
+      applyClassification("auto");
     };
     img.onerror = function(){
+      URL.revokeObjectURL(url);
       importNote.style.display = "block";
       importNote.textContent = "이미지를 불러오지 못했습니다. 다른 파일로 다시 시도해 주세요.";
     };
     img.src = url;
     e.target.value = "";
+  });
+  document.getElementById("importModeSel").addEventListener("change", function(e){
+    applyClassification(e.target.value);
   });
 
   // ---- calibration against real measurements ----
