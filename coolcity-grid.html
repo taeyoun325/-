@@ -959,7 +959,7 @@
             <input type="range" id="windStrength" min="0" max="100" step="5" value="0" aria-label="바람 세기">
           </div>
         </div>
-        <p class="env-note">낮 시간대는 태양열로 열섬이 심해지고, 밤에는 완화됩니다. 바람은 상풍(upwind) 쪽 칸의 열이 하풍 쪽으로 더 강하게 옮겨가도록 근사합니다.</p>
+        <p class="env-note">낮 시간대는 태양열로 열섬이 심해지고, 밤에는 완화됩니다. 바람은 ① 상풍(upwind) 쪽 칸의 열을 하풍 쪽으로 더 강하게 옮기고, ② 도시 전체의 열을 주변 공기로 더 빨리 실어 나가 열섬 자체를 약하게 만듭니다.</p>
       </div>
 
       <div class="budget-note">
@@ -1003,7 +1003,7 @@
           <div class="coef-row"><span>공원·녹지(증발산)</span><span id="coefPark">기준 대비 −3.5℃</span></div>
           <div class="coef-row"><span>물(하천·수역)</span><span id="coefWater">기준 대비 −5.5℃</span></div>
         </div>
-        <p class="science-note">각 칸의 온도는 지표 재질별 초기값을 격자 확산(diffusion) 방식으로 반복 계산해 이웃 칸과 열이 섞이는 효과를 근사한 값입니다. 시간대는 태양열 세기를 0(야간)~1.2배(오후 1~2시 정점)로 스케일링하고, 바람은 상풍 쪽 이웃 칸에 가중치를 더 줘서(약식 이류 근사) 하풍 방향으로 열이 더 강하게 퍼지도록 반영했습니다. 실제 실외 실측값이 아니라 배치 전략을 비교하기 위한 상대적 모델이며, 아래 보정 기능으로 실제 측정 데이터와 맞춰볼 수 있습니다.</p>
+        <p class="science-note">각 칸의 온도는 지표 재질별 열원값을 격자 확산(diffusion) 방식으로 10회 반복 계산해 이웃 칸과 열이 섞이는 효과를 근사한 값입니다. 모델에 들어간 가정은 네 가지입니다. <b>① 시간대</b>: 태양열 세기를 0.25배(야간)~1.2배(오후 1~2시 정점)로 스케일링합니다. <b>② 바람의 이류</b>: 상풍 쪽 이웃 칸에 가중치를 더 줘 하풍 방향으로 열이 더 강하게 퍼집니다. <b>③ 열린 경계</b>: 격자 바깥은 기준기온(24℃)의 주변 공기로 보고 가장자리 칸이 그 공기와 열을 주고받습니다 — 그래서 도심 안쪽이 가장 덥고 외곽으로 갈수록 식는 실제 열섬 단면이 나타납니다. <b>④ 환기 효과</b>: 바람이 셀수록 지표에서 공기로 열이 빠져나가는 속도가 빨라져 열섬 세기 자체가 최대 35%까지 줄어듭니다. 실제 실외 실측값이 아니라 배치 전략을 비교하기 위한 상대적 모델이며, 아래 보정 기능으로 실제 측정 데이터와 맞춰볼 수 있습니다.</p>
       </details>
 
       <details class="science" id="calibPanel">
@@ -1567,6 +1567,26 @@ function(t){t.__bidiEngine__=t.prototype.__bidiEngine__=function(t){var r,n,i,a,
   // blows FROM) gets extra weight in that cell's local average, approximating
   // advection without a full fluid-flow solver.
   var WIND_UPWIND_BOOST = 3;
+
+  // The grid is an open patch of city, not a sealed box: past its edges is the
+  // cooler rural/suburban surround sitting at the 24C baseline. Off-grid
+  // neighbours therefore contribute ambient air rather than being skipped, and
+  // wind widens that exchange (ventilation). An insulated boundary would
+  // conserve the grid's total heat exactly, which is why an earlier version of
+  // this model showed a city that never cooled at the edges and a wind slider
+  // that moved the average by hundredths of a degree.
+  var BOUNDARY_CALM = 0.45;  // exchange with the surround even on a still day
+  var BOUNDARY_WIND = 0.75;  // additional edge exchange at full wind strength
+
+  // Bulk ventilation. Boundary exchange alone only cools the outer ring, but
+  // wind raises the convective heat-transfer coefficient over EVERY surface, so
+  // the whole heat-island anomaly shrinks as it picks up (the observed
+  // UHI-vs-windspeed relationship). Because a uniform patch relaxes to exactly
+  // its own source value, scaling the source term by (1 - VENT_MAX*strength)
+  // scales the steady-state anomaly by the same factor -- no compounding across
+  // iterations, so the constant means what it says: at full wind the modelled
+  // heat island is VENT_MAX weaker.
+  var VENT_MAX = 0.35;
   // `env` lets a caller evaluate a grid under conditions other than the ones
   // currently on screen (used by the controlled-variable experiments, which
   // must sweep one variable while every other stays pinned). Omitted fields
@@ -1583,31 +1603,36 @@ function(t){t.__bidiEngine__=t.prototype.__bidiEngine__=function(t){var r,n,i,a,
     var wRight = 1 + Math.max(0, -wx) * WIND_UPWIND_BOOST;
     var wUp = 1 + Math.max(0, wy) * WIND_UPWIND_BOOST;
     var wDown = 1 + Math.max(0, -wy) * WIND_UPWIND_BOOST;
+    var openness = BOUNDARY_CALM + BOUNDARY_WIND * strength;
+    var ventilation = 1 - VENT_MAX * strength;
 
     var t = new Float32Array(N);
-    for (var i = 0; i < N; i++) t[i] = src[g[i]] * intensity;
+    for (var i = 0; i < N; i++) t[i] = src[g[i]] * intensity * ventilation;
     for (var iter = 0; iter < ITERS; iter++) {
       var nt = new Float32Array(N);
       for (var i2 = 0; i2 < N; i2++) {
         var d = neighborDir[i2];
         var sum = 0, wsum = 0;
-        if (d.W >= 0) { sum += t[d.W] * wLeft; wsum += wLeft; }
-        if (d.E >= 0) { sum += t[d.E] * wRight; wsum += wRight; }
-        if (d.N >= 0) { sum += t[d.N] * wUp; wsum += wUp; }
-        if (d.S >= 0) { sum += t[d.S] * wDown; wsum += wDown; }
+        // ambient air outside the grid is 0 (= the 24C baseline), so an
+        // off-grid neighbour adds nothing to `sum` but still adds its weight
+        // to `wsum`, pulling the edge cell back towards the surround
+        if (d.W >= 0) { sum += t[d.W] * wLeft; wsum += wLeft; } else { wsum += wLeft * openness; }
+        if (d.E >= 0) { sum += t[d.E] * wRight; wsum += wRight; } else { wsum += wRight * openness; }
+        if (d.N >= 0) { sum += t[d.N] * wUp; wsum += wUp; } else { wsum += wUp * openness; }
+        if (d.S >= 0) { sum += t[d.S] * wDown; wsum += wDown; } else { wsum += wDown * openness; }
         var avg = wsum > 0 ? sum / wsum : t[i2];
-        nt[i2] = src[g[i2]] * intensity * 0.55 + avg * 0.45;
+        nt[i2] = src[g[i2]] * intensity * ventilation * 0.55 + avg * 0.45;
       }
       t = nt;
     }
     return t;
   }
 
-  // Diffusion conserves total heat, so the whole-grid average barely moves when
-  // green space is only relocated (not added). What actually matters is how hot
-  // it is where people are, so scoring restricts to occupied cells (building /
-  // road / grass) and excludes park / water, which are trivially the coolest
-  // cells and would mask real placement gains.
+  // What matters for a heat-island study is how hot it is WHERE PEOPLE ARE, so
+  // scoring restricts to occupied cells (building / road / grass) and excludes
+  // park / water: those are trivially the coolest cells, and counting them
+  // would let a layout score well simply by having cool cells somewhere,
+  // rather than by cooling the places people actually stand in.
   function occupiedStats(g, t) {
     var sum = 0, max = -Infinity, min = Infinity, c = 0;
     for (var i = 0; i < g.length; i++) {
@@ -2949,6 +2974,15 @@ function(t){t.__bidiEngine__=t.prototype.__bidiEngine__=function(t){var r,n,i,a,
 
   function cloneGrid(g){ return g.slice(); }
 
+  // requestAnimationFrame stops firing in a background tab, which would leave a
+  // half-finished optimization stuck with its button disabled if the student
+  // switches tabs mid-run. Falling back to a timer keeps the search going; the
+  // per-frame redraw is pointless while hidden anyway.
+  function scheduleOptimizeTick(fn) {
+    if (document.hidden) setTimeout(fn, 0);
+    else requestAnimationFrame(fn);
+  }
+
   btnOptimize.addEventListener("click", function(){
     if (optimizing) return;
     var parkIdx = [], movableIdx = [];
@@ -2975,17 +3009,21 @@ function(t){t.__bidiEngine__=t.prototype.__bidiEngine__=function(t){var r,n,i,a,
     var beforeSnapshot = snapshotGridCanvas(current, currentTemps);
 
     var history = [currentAvg];
-    var T = 1.4;
-    var cooling = 0.985;
-    var totalSteps = 240;
+    var totalSteps = 600;
+    var sched = annealSchedule(estimateMoveScale(current, parkIdx, movableIdx, currentAvg, 14), totalSteps);
+    var T = sched.T0;
     var step = 0;
-    var stepsPerFrame = 6;
+    var stepsPerFrame = 12;
 
     function tick() {
       var did = 0;
-      while (did < stepsPerFrame && step < totalSteps) {
-        var pI = parkIdx[Math.floor(Math.random() * parkIdx.length)];
-        var mI = movableIdx[Math.floor(Math.random() * movableIdx.length)];
+      // a hidden tab clamps timers to ~1s per tick, so do far more work per
+      // tick there -- nothing is being drawn for those steps anyway
+      var budget = document.hidden ? 80 : stepsPerFrame;
+      while (did < budget && step < totalSteps) {
+        var pPos = Math.floor(Math.random() * parkIdx.length);
+        var mPos = Math.floor(Math.random() * movableIdx.length);
+        var pI = parkIdx[pPos], mI = movableIdx[mPos];
         var savedP = current[pI], savedM = current[mI];
         current[pI] = savedM;
         current[mI] = savedP;
@@ -2997,6 +3035,10 @@ function(t){t.__bidiEngine__=t.prototype.__bidiEngine__=function(t){var r,n,i,a,
         var accept = delta < 0 || Math.random() < Math.exp(-delta / T);
         if (accept) {
           currentAvg = avg;
+          // keep the two index lists describing what the grid actually holds
+          // now, so later steps don't pick cells that already changed type
+          parkIdx[pPos] = mI;
+          movableIdx[mPos] = pI;
           if (avg < bestAvg) {
             bestAvg = avg;
             best = cloneGrid(current);
@@ -3005,7 +3047,7 @@ function(t){t.__bidiEngine__=t.prototype.__bidiEngine__=function(t){var r,n,i,a,
           current[pI] = savedP;
           current[mI] = savedM;
         }
-        T *= cooling;
+        T *= sched.cooling;
         step++;
         did++;
         history.push(currentAvg);
@@ -3015,7 +3057,7 @@ function(t){t.__bidiEngine__=t.prototype.__bidiEngine__=function(t){var r,n,i,a,
       chartStatus.textContent = "탐색 중 (" + step + "/" + totalSteps + ")";
 
       if (step < totalSteps) {
-        requestAnimationFrame(tick);
+        scheduleOptimizeTick(tick);
       } else {
         finish();
       }
@@ -3036,10 +3078,12 @@ function(t){t.__bidiEngine__=t.prototype.__bidiEngine__=function(t){var r,n,i,a,
 
       var improved = beforeAvg - bestAvg;
       deltaLine.style.display = "flex";
-      document.getElementById("deltaBefore").textContent = (24 + beforeAvg).toFixed(1) + "℃";
-      document.getElementById("deltaAfter").textContent = (24 + bestAvg).toFixed(1) + "℃";
+      // two decimals here (the stat cards use one): a placement-only change
+      // moves the average by tenths, and "28.2 -> 28.1" would hide most of it
+      document.getElementById("deltaBefore").textContent = (24 + beforeAvg).toFixed(2) + "℃";
+      document.getElementById("deltaAfter").textContent = (24 + bestAvg).toFixed(2) + "℃";
       document.getElementById("deltaGood").textContent = improved > 0.02
-        ? ("−" + improved.toFixed(1) + "℃ 개선")
+        ? ("−" + improved.toFixed(2) + "℃ 개선")
         : "추가 개선 어려움 (이미 근접 최적)";
       chartStatus.textContent = "완료";
 
@@ -3050,7 +3094,7 @@ function(t){t.__bidiEngine__=t.prototype.__bidiEngine__=function(t){var r,n,i,a,
       btnOptimize.disabled = false;
     }
 
-    requestAnimationFrame(tick);
+    scheduleOptimizeTick(tick);
   });
 
   // ---- 탐구 실험실: 변인 통제 실험 (controlled-variable experiments) ----
@@ -3205,6 +3249,34 @@ function(t){t.__bidiEngine__=t.prototype.__bidiEngine__=function(t){var r,n,i,a,
     return out;
   }
 
+  // Simulated annealing only discriminates when its temperature is on the same
+  // order as the move deltas it judges: accepting a worsening move has
+  // probability exp(-delta/T), so a T far above the typical |delta| accepts
+  // everything and degenerates into a random walk. Swapping one park in an
+  // 18x18 grid moves the occupied-cell average by hundredths of a degree, so
+  // the starting temperature is measured from the problem instead of
+  // hard-coded -- it stays sane after calibration changes the coefficients, or
+  // for a city with very few parks.
+  function estimateMoveScale(g, parkIdx, movableIdx, baseAvg, probes) {
+    if (!parkIdx.length || !movableIdx.length) return 0.02;
+    var tmp = g.slice(), acc = 0;
+    for (var s = 0; s < probes; s++) {
+      var pI = parkIdx[Math.floor(Math.random() * parkIdx.length)];
+      var mI = movableIdx[Math.floor(Math.random() * movableIdx.length)];
+      var a = tmp[pI], b = tmp[mI];
+      tmp[pI] = b; tmp[mI] = a;
+      acc += Math.abs(occupiedStats(tmp, computeTemps(tmp)).avg - baseAvg);
+      tmp[pI] = a; tmp[mI] = b;
+    }
+    return Math.max(1e-4, acc / probes);
+  }
+  function annealSchedule(scale, steps) {
+    // start hot enough to escape a bad start (a couple of typical moves), end
+    // cold enough that the last fifth of the run is effectively greedy
+    var T0 = scale * 1.8;
+    return { T0: T0, cooling: Math.pow(0.02, 1 / Math.max(1, steps)) };
+  }
+
   // Headless version of the on-screen annealer, used for the "AI 최적화" bar.
   // It keeps the park/movable index lists in sync after an accepted swap —
   // otherwise later steps keep picking cells that have already changed type and
@@ -3219,7 +3291,8 @@ function(t){t.__bidiEngine__=t.prototype.__bidiEngine__=function(t){var r,n,i,a,
     if (!parkIdx.length || !movableIdx.length) return current;
     var currentAvg = occupiedStats(current, computeTemps(current)).avg;
     var best = current.slice(), bestAvg = currentAvg;
-    var T = 1.4;
+    var sched = annealSchedule(estimateMoveScale(current, parkIdx, movableIdx, currentAvg, 12), steps);
+    var T = sched.T0;
     for (var s = 0; s < steps; s++) {
       var pPos = Math.floor(Math.random() * parkIdx.length);
       var mPos = Math.floor(Math.random() * movableIdx.length);
@@ -3235,7 +3308,7 @@ function(t){t.__bidiEngine__=t.prototype.__bidiEngine__=function(t){var r,n,i,a,
       } else {
         current[pI] = savedP; current[mI] = savedM;
       }
-      T *= 0.985;
+      T *= sched.cooling;
     }
     return best;
   }
@@ -3360,7 +3433,7 @@ function(t){t.__bidiEngine__=t.prototype.__bidiEngine__=function(t){var r,n,i,a,
       },
       run: function(v, ctxObj){
         var g = (v === "ai")
-          ? annealParks(placeParksByShape(ctxObj.base, ctxObj.parkCount, "random"), 220)
+          ? annealParks(placeParksByShape(ctxObj.base, ctxObj.parkCount, "random"), 420)
           : placeParksByShape(ctxObj.base, ctxObj.parkCount, v);
         return 24 + occupiedStats(g, computeTemps(g)).avg;
       },
