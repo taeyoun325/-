@@ -1112,6 +1112,7 @@
     }
     updateStatsPanel();
     drawIso();
+    scheduleSave();
   }
 
   // ---- isometric 3D view ----
@@ -1546,8 +1547,8 @@
   }
   tabFlat.addEventListener("click", function(){ selectView("flat"); });
   tabIso.addEventListener("click", function(){ selectView("iso"); });
-  document.getElementById("isoRotateLeft").addEventListener("click", function(){ isoRotation -= 1; drawIso(); });
-  document.getElementById("isoRotateRight").addEventListener("click", function(){ isoRotation += 1; drawIso(); });
+  document.getElementById("isoRotateLeft").addEventListener("click", function(){ isoRotation -= 1; drawIso(); scheduleSave(); });
+  document.getElementById("isoRotateRight").addEventListener("click", function(){ isoRotation += 1; drawIso(); scheduleSave(); });
 
   function updateStatsPanel() {
     var s = occupiedStats(grid, temps);
@@ -2073,8 +2074,61 @@
   if (mq.addEventListener) mq.addEventListener("change", onThemeMaybeChanged);
   new MutationObserver(onThemeMaybeChanged).observe(document.documentElement, { attributes:true, attributeFilter:["data-theme"] });
 
+  // ---- persistence: survive an accidental reload ----
+  // localStorage can throw in a private window or with site data blocked, so
+  // every access is wrapped — a failed save/load just falls back to a fresh
+  // random city, never a broken page.
+  var STORAGE_KEY = "coolcitygrid_state_v1";
+  var saveTimer = null;
+  function scheduleSave() {
+    if (saveTimer) clearTimeout(saveTimer);
+    saveTimer = setTimeout(saveState, 600);
+  }
+  function saveState() {
+    try {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify({
+        grid: grid,
+        hourOfDay: hourOfDay,
+        windDir: windDir,
+        windStrength: windStrength,
+        source: SOURCE,
+        isoRotation: isoRotation
+      }));
+    } catch (e) {}
+  }
+  function loadState() {
+    try {
+      var raw = localStorage.getItem(STORAGE_KEY);
+      if (!raw) return false;
+      var state = JSON.parse(raw);
+      if (!state || !Array.isArray(state.grid) || state.grid.length !== N) return false;
+      grid = state.grid;
+      if (typeof state.hourOfDay === "number") hourOfDay = state.hourOfDay;
+      if (state.windDir) windDir = state.windDir;
+      if (typeof state.windStrength === "number") windStrength = state.windStrength;
+      if (state.source) {
+        Object.keys(SOURCE).forEach(function(k){
+          if (typeof state.source[k] === "number") SOURCE[k] = state.source[k];
+        });
+      }
+      if (typeof state.isoRotation === "number") isoRotation = state.isoRotation;
+      return true;
+    } catch (e) { return false; }
+  }
+
   // ---- init ----
   refreshHeatStops();
-  randomCity();
+  if (loadState()) {
+    document.getElementById("hourSlider").value = hourOfDay;
+    document.getElementById("windDir").value = windDir;
+    document.getElementById("windStrength").value = Math.round(windStrength * 100);
+    updateEnvLabels();
+    updateCoefTable();
+    render();
+    importNote.style.display = "block";
+    importNote.textContent = "이전에 작업하던 도시를 이 브라우저에서 불러왔습니다. 다른 기기나 브라우저에서는 보이지 않아요.";
+  } else {
+    randomCity();
+  }
 })();
 </script>
