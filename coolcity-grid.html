@@ -1100,6 +1100,53 @@
   var isoCanvas = document.getElementById("isoCanvas");
   var isoCtx = isoCanvas.getContext("2d");
 
+  // Sky keyframes (hour -> top/bottom RGB) driven by the same clock as the
+  // heat simulation, so night/day in the picture always matches the physics.
+  var SKY_STOPS = [
+    { h: 0,    top: [10, 14, 30],   bottom: [22, 27, 52] },
+    { h: 5,    top: [10, 14, 30],   bottom: [30, 32, 58] },
+    { h: 6.5,  top: [120, 130, 180], bottom: [255, 176, 128] },
+    { h: 9,    top: [120, 190, 250], bottom: [214, 236, 255] },
+    { h: 14,   top: [96, 172, 248],  bottom: [206, 232, 255] },
+    { h: 17.5, top: [110, 120, 190], bottom: [255, 154, 104] },
+    { h: 19,   top: [35, 36, 74],   bottom: [78, 62, 100] },
+    { h: 22,   top: [10, 14, 30],   bottom: [22, 27, 52] },
+    { h: 24,   top: [10, 14, 30],   bottom: [22, 27, 52] }
+  ];
+  function lerp3(a, b, t) { return [a[0]+(b[0]-a[0])*t, a[1]+(b[1]-a[1])*t, a[2]+(b[2]-a[2])*t]; }
+  function skyColors(hour) {
+    for (var i = 0; i < SKY_STOPS.length - 1; i++) {
+      var a = SKY_STOPS[i], b = SKY_STOPS[i+1];
+      if (hour >= a.h && hour <= b.h) {
+        var t = (hour - a.h) / (b.h - a.h);
+        return { top: lerp3(a.top, b.top, t), bottom: lerp3(a.bottom, b.bottom, t) };
+      }
+    }
+    return { top: SKY_STOPS[0].top, bottom: SKY_STOPS[0].bottom };
+  }
+  function rgbStr(rgb, a) { return "rgba(" + Math.round(rgb[0]) + "," + Math.round(rgb[1]) + "," + Math.round(rgb[2]) + "," + (a==null?1:a) + ")"; }
+
+  function bilerp(p00, p10, p01, p11, u, v) {
+    var tx = p00[0] + (p10[0]-p00[0])*u, ty = p00[1] + (p10[1]-p00[1])*u;
+    var bx = p01[0] + (p11[0]-p01[0])*u, by = p01[1] + (p11[1]-p01[1])*u;
+    return [tx + (bx-tx)*v, ty + (by-ty)*v];
+  }
+  function drawWindows(corners, seed, litProb) {
+    // corners: [topLeft, topRight, bottomLeft, bottomRight] of the face quad
+    var rows = 3, cols = 2;
+    for (var r = 0; r < rows; r++) {
+      for (var c = 0; c < cols; c++) {
+        var u = 0.24 + c * 0.52, v = 0.18 + r * 0.28;
+        if (v > 0.92) continue;
+        var pr = pseudoRand(seed + r * 7 + c * 13);
+        var pt = bilerp(corners[0], corners[1], corners[2], corners[3], u, v);
+        var lit = pr < litProb;
+        isoCtx.fillStyle = lit ? "rgba(255,214,120,0.95)" : "rgba(10,12,10,0.30)";
+        isoCtx.fillRect(pt[0] - 1.1, pt[1] - 1.4, 2.2, 2.8);
+      }
+    }
+  }
+
   function drawIso() {
     if (!heatStops) refreshHeatStops();
     var isoW = SIZE * ISO_TILE_W + 40;
@@ -1111,7 +1158,14 @@
       isoCanvas.height = wantH;
     }
     isoCtx.setTransform(dpr, 0, 0, dpr, 0, 0);
-    isoCtx.clearRect(0, 0, isoW, isoH);
+
+    // sky
+    var sky = skyColors(hourOfDay);
+    var skyGrad = isoCtx.createLinearGradient(0, 0, 0, isoH);
+    skyGrad.addColorStop(0, rgbStr(sky.top));
+    skyGrad.addColorStop(1, rgbStr(sky.bottom));
+    isoCtx.fillStyle = skyGrad;
+    isoCtx.fillRect(0, 0, isoW, isoH);
 
     var originX = isoW / 2;
     var originY = ISO_MAX_H * ISO_HEIGHT_SCALE + 30;
@@ -1125,6 +1179,32 @@
       }
     }
     order.sort(function(a, b){ return (a.rx + a.ry) - (b.rx + b.ry) || (a.rx - b.rx); });
+
+    // Sun position: shadows swing from one side to the other across the day
+    // and stretch out near sunrise/sunset, matching the time-of-day slider.
+    var solar = solarFactor(hourOfDay);
+    var dayT = Math.max(0, Math.min(1, (hourOfDay - 6) / 12));
+    var shadowDirX = dayT * 2 - 1;
+    var shadowLenFactor = solar > 0.02 ? Math.max(0.12, Math.min(0.9, 1 - solar)) : 0;
+
+    if (shadowLenFactor > 0) {
+      for (var s = 0; s < order.length; s++) {
+        var so = order[s];
+        var stype = grid[so.i];
+        var sh = cellHeight(so.i, stype);
+        if (sh < 0.5) continue;
+        var sBaseX = originX + (so.rx - so.ry) * hw;
+        var sBaseY = originY + (so.rx + so.ry) * hh;
+        var offX = shadowDirX * sh * ISO_HEIGHT_SCALE * shadowLenFactor * 0.85;
+        var offY = sh * ISO_HEIGHT_SCALE * shadowLenFactor * 0.22;
+        isoCtx.beginPath();
+        isoCtx.ellipse(sBaseX + offX * 0.6, sBaseY + offY * 0.4, hw * 0.85 + Math.abs(offX) * 0.45, hh * 0.75, 0, 0, Math.PI * 2);
+        isoCtx.fillStyle = "rgba(8,10,18,0.20)";
+        isoCtx.fill();
+      }
+    }
+
+    var litProb = solar > 0.4 ? 0.04 : (0.25 + (1 - solar) * 0.4);
 
     for (var k = 0; k < order.length; k++) {
       var o = order[k];
@@ -1152,10 +1232,35 @@
       isoCtx.moveTo(Ep[0], Ep[1]); isoCtx.lineTo(Sp[0], Sp[1]); isoCtx.lineTo(Sg[0], Sg[1]); isoCtx.lineTo(Eg[0], Eg[1]); isoCtx.closePath();
       isoCtx.fillStyle = rightFill; isoCtx.fill();
 
+      if (type === "building" && h > 1.2) {
+        drawWindows([Wp, Sp, Wg, Sg], o.i * 31 + 1, litProb);
+        drawWindows([Sp, Ep, Sg, Eg], o.i * 31 + 97, litProb);
+      }
+
       isoCtx.beginPath();
       isoCtx.moveTo(Np[0], Np[1]); isoCtx.lineTo(Ep[0], Ep[1]); isoCtx.lineTo(Sp[0], Sp[1]); isoCtx.lineTo(Wp[0], Wp[1]); isoCtx.closePath();
       isoCtx.fillStyle = topFill; isoCtx.fill();
       isoCtx.strokeStyle = "rgba(0,0,0,.12)"; isoCtx.lineWidth = 1; isoCtx.stroke();
+
+      if (type === "water") {
+        isoCtx.strokeStyle = "rgba(255,255,255,0.35)";
+        isoCtx.lineWidth = 0.8;
+        for (var wl = -1; wl <= 1; wl++) {
+          isoCtx.beginPath();
+          isoCtx.moveTo(Wp[0] + hw*0.25, Wp[1] + hh*(0.5+wl*0.28));
+          isoCtx.lineTo(Ep[0] - hw*0.25, Ep[1] + hh*(0.5+wl*0.28));
+          isoCtx.stroke();
+        }
+      } else if (type === "park") {
+        var pr1 = pseudoRand(o.i * 5 + 2), pr2 = pseudoRand(o.i * 5 + 3);
+        var c1x = baseX + (pr1 - 0.5) * hw * 0.8, c1y = topY - hh * 0.15 - pr1 * 2;
+        var c2x = baseX + (pr2 - 0.5) * hw * 0.8, c2y = topY + hh * 0.05 - pr2 * 2;
+        isoCtx.fillStyle = shadeRgb(rgb, 0.55);
+        isoCtx.beginPath(); isoCtx.ellipse(c1x, c1y, hw*0.32, hh*0.55, 0, 0, Math.PI*2); isoCtx.fill();
+        isoCtx.beginPath(); isoCtx.ellipse(c2x, c2y, hw*0.26, hh*0.46, 0, 0, Math.PI*2); isoCtx.fill();
+        isoCtx.fillStyle = shadeRgb(rgb, 0.95);
+        isoCtx.beginPath(); isoCtx.ellipse(c1x - hw*0.08, c1y - hh*0.12, hw*0.14, hh*0.22, 0, 0, Math.PI*2); isoCtx.fill();
+      }
     }
   }
 
