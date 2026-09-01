@@ -247,6 +247,49 @@
     border-radius:8px;
     padding:8px 10px;
   }
+
+  .city-row{
+    display:flex;
+    align-items:center;
+    gap:10px;
+    flex-wrap:wrap;
+    margin-bottom:10px;
+  }
+  .city-label{
+    font:600 11px "IBM Plex Mono",monospace;
+    letter-spacing:.03em;
+    color:var(--ink-mute);
+    text-transform:uppercase;
+  }
+  .city-buttons{ display:flex; gap:6px; }
+  .citybtn{
+    font:700 12.5px "Gothic A1",sans-serif;
+    border:1.5px solid var(--line-strong);
+    background:var(--panel-2);
+    color:var(--ink-dim);
+    border-radius:8px;
+    padding:6px 12px;
+    cursor:pointer;
+    transition:border-color .12s ease, color .12s ease, background .12s ease;
+  }
+  .citybtn:hover{ color:var(--ink); }
+  .citybtn[aria-pressed="true"]{
+    border-color:var(--accent);
+    background:var(--accent-soft);
+    color:var(--accent-text);
+  }
+  .city-info{
+    margin:-2px 0 14px;
+    font-size:11.5px;
+    line-height:1.6;
+    color:var(--ink-dim);
+    background:var(--panel-2);
+    border:1px dashed var(--line-strong);
+    border-radius:8px;
+    padding:8px 10px;
+  }
+  .city-info b{ color:var(--ink); font-family:"IBM Plex Mono",monospace; font-variant-numeric:tabular-nums; }
+  .city-info .src{ display:block; margin-top:4px; color:var(--ink-mute); font-size:10.5px; }
   .btn{
     font:700 12.5px "Gothic A1",sans-serif;
     border-radius:9px;
@@ -627,6 +670,16 @@
         <input type="file" id="imageInput" accept="image/*" style="display:none">
       </div>
       <p class="import-note" id="importNote" style="display:none;"></p>
+
+      <div class="city-row">
+        <span class="city-label">실제 도시 통계로 생성</span>
+        <div class="city-buttons" role="group" aria-label="도시 프리셋">
+          <button class="citybtn" data-city="seoul">서울형</button>
+          <button class="citybtn" data-city="busan">부산형</button>
+          <button class="citybtn" data-city="jeju">제주형</button>
+        </div>
+      </div>
+      <div class="city-info" id="cityInfo" style="display:none;"></div>
 
       <div class="viewtabs" role="tablist" aria-label="캔버스 보기 전환">
         <button class="viewtab" id="tabFlat" role="tab" aria-selected="true">평면 편집</button>
@@ -1157,10 +1210,78 @@
     }
     render();
   }
-  document.getElementById("btnRandom").addEventListener("click", randomCity);
+  function clearCityPresetUI() {
+    document.getElementById("cityInfo").style.display = "none";
+    document.querySelectorAll(".citybtn").forEach(function(b){ b.setAttribute("aria-pressed", "false"); });
+  }
+  document.getElementById("btnRandom").addEventListener("click", function(){ clearCityPresetUI(); randomCity(); });
   document.getElementById("btnClear").addEventListener("click", function(){
+    clearCityPresetUI();
     grid = new Array(N).fill("grass");
     render();
+  });
+
+  // ---- real-city presets ----
+  // greenRatio, popDensity, tropicalNights and heatwaveDays are official
+  // published statistics (sources below, shown in the UI). The building /
+  // road / water / grass split of the REMAINING non-green area is this
+  // tool's own modeling assumption, informed by each city's population
+  // density but not itself a cited figure — the city-info panel says so
+  // explicitly so this isn't presented as more precise than it is.
+  var CITY_PRESETS = {
+    seoul: {
+      label: "서울",
+      greenRatio: 0.386,
+      composition: { building: 0.40, road: 0.16, water: 0.02, grass: 0.034 },
+      popDensity: "15,551명/㎢",
+      climate: "2024년 여름 열대야 39일 · 폭염 27일",
+      source: "녹지율·인구밀도: KOSIS 국가통계포털 지역지표 / 기후: 기상청 「2024년 여름철 기후특성」(2024.9.5)"
+    },
+    busan: {
+      label: "부산",
+      greenRatio: 0.5776,
+      composition: { building: 0.24, road: 0.12, water: 0.04, grass: 0.0224 },
+      popDensity: "4,278명/㎢",
+      climate: "2024년 여름 열대야 평년 대비 최다(부산지방기상청 집계)",
+      source: "녹지율·인구밀도: KOSIS 국가통계포털 지역지표 / 기후: 기상청·부산지방기상청 2024년 여름철 자료"
+    },
+    jeju: {
+      label: "제주",
+      greenRatio: 0.8259,
+      composition: { building: 0.08, road: 0.06, water: 0.02, grass: 0.0141 },
+      popDensity: "약 366명/㎢",
+      climate: "2024년 여름 열대야 56일 · 폭염 35일(전국 1위)",
+      source: "녹지율: KOSIS 국가통계포털 지역지표 / 인구밀도: 제주특별자치도 인구통계 / 기후: 기상청 「2024년 여름철 기후특성」(2024.9.5)"
+    }
+  };
+
+  function generateCityPreset(key) {
+    var p = CITY_PRESETS[key];
+    var comp = p.composition;
+    for (var i = 0; i < N; i++) {
+      var r = Math.random();
+      if (r < p.greenRatio) grid[i] = "park";
+      else if (r < p.greenRatio + comp.building) grid[i] = "building";
+      else if (r < p.greenRatio + comp.building + comp.road) grid[i] = "road";
+      else if (r < p.greenRatio + comp.building + comp.road + comp.water) grid[i] = "water";
+      else grid[i] = "grass";
+    }
+    render();
+
+    var cityInfo = document.getElementById("cityInfo");
+    cityInfo.style.display = "block";
+    cityInfo.innerHTML =
+      p.label + " 실제 통계 반영: 녹지율 <b>" + (p.greenRatio * 100).toFixed(1) + "%</b>, 인구밀도 <b>" + p.popDensity + "</b>, " + p.climate +
+      ". 건물·도로·물 비율은 인구밀도를 참고해 이 도구가 추정한 값입니다(녹지율만 실측 통계)." +
+      "<span class=\"src\">출처: " + p.source + "</span>";
+
+    document.querySelectorAll(".citybtn").forEach(function(b){
+      b.setAttribute("aria-pressed", b.dataset.city === key ? "true" : "false");
+    });
+  }
+
+  document.querySelectorAll(".citybtn").forEach(function(btn){
+    btn.addEventListener("click", function(){ generateCityPreset(btn.dataset.city); });
   });
 
   // ---- import from satellite / site-plan image ----
