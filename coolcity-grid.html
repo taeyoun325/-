@@ -1243,6 +1243,12 @@
       var topY = baseY - h * ISO_HEIGHT_SCALE;
 
       var rgb = tempToRgb(temps[o.i]);
+      if (type === "water") {
+        // water picks up a hint of the sky color, so it shifts warm at
+        // sunset and dark at night instead of staying a flat blue always
+        var wt = 0.20;
+        rgb = [rgb[0]*(1-wt)+sky.top[0]*wt, rgb[1]*(1-wt)+sky.top[1]*wt, rgb[2]*(1-wt)+sky.top[2]*wt].map(Math.round);
+      }
       var topFill = "rgb(" + rgb[0] + "," + rgb[1] + "," + rgb[2] + ")";
       var leftFill = shadeRgb(rgb, 0.60);
       var rightFill = shadeRgb(rgb, 0.80);
@@ -1269,6 +1275,26 @@
       isoCtx.moveTo(Np[0], Np[1]); isoCtx.lineTo(Ep[0], Ep[1]); isoCtx.lineTo(Sp[0], Sp[1]); isoCtx.lineTo(Wp[0], Wp[1]); isoCtx.closePath();
       isoCtx.fillStyle = topFill; isoCtx.fill();
       isoCtx.strokeStyle = "rgba(0,0,0,.12)"; isoCtx.lineWidth = 1; isoCtx.stroke();
+
+      if (type === "building" && h > 1.6 && pseudoRand(o.i * 31 + 51) < 0.35) {
+        var rx = baseX + (pseudoRand(o.i * 31 + 53) - 0.5) * hw * 0.7;
+        var ry = topY + (pseudoRand(o.i * 31 + 55) - 0.5) * hh * 0.5;
+        var isTank = pseudoRand(o.i * 31 + 57) < 0.5;
+        isoCtx.fillStyle = isTank ? "#8a8f86" : "#4d5148";
+        if (isTank) {
+          isoCtx.beginPath(); isoCtx.ellipse(rx, ry - 3, 2.6, 1.6, 0, 0, Math.PI*2); isoCtx.fill();
+          isoCtx.fillRect(rx - 2.6, ry - 3, 5.2, 3);
+        } else {
+          isoCtx.fillRect(rx - 2.2, ry - 1.6, 4.4, 3.2);
+        }
+      } else if (type === "grass") {
+        for (var gd = 0; gd < 5; gd++) {
+          var gx = baseX + (pseudoRand(o.i * 19 + gd) - 0.5) * hw * 1.1;
+          var gy = topY + (pseudoRand(o.i * 19 + gd + 50) - 0.5) * hh * 0.9;
+          isoCtx.fillStyle = pseudoRand(o.i*19+gd+80) < 0.5 ? shadeRgb(rgb, 0.7) : shadeRgb(rgb, 1.15);
+          isoCtx.beginPath(); isoCtx.arc(gx, gy, 0.9, 0, Math.PI*2); isoCtx.fill();
+        }
+      }
 
       if (type === "water") {
         isoCtx.strokeStyle = "rgba(255,255,255,0.35)";
