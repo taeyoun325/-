@@ -550,6 +550,16 @@
     gap:8px;
     align-items:center;
   }
+  .wind-controls input[type="number"]{
+    flex:1;
+    min-width:0;
+    padding:6px 8px;
+    border:1px solid var(--line);
+    border-radius:7px;
+    background:var(--panel);
+    color:var(--ink);
+    font:600 12px "IBM Plex Mono",monospace;
+  }
   .wind-controls select{
     font:600 12px "Gothic A1",sans-serif;
     background:var(--panel);
@@ -923,9 +933,9 @@
         <div class="legend">
           <div class="legend-bar" aria-hidden="true"></div>
           <div class="legend-ticks">
-            <span>18℃ 저온</span>
-            <b>24℃ 기준</b>
-            <span>30℃ 고온</span>
+            <span id="legendLow">18℃ 저온</span>
+            <b id="legendMid">24℃ 기준</b>
+            <span id="legendHigh">30℃ 고온</span>
           </div>
         </div>
 
@@ -983,6 +993,14 @@
             <input type="range" id="windStrength" min="0" max="100" step="5" value="0" aria-label="바람 세기">
           </div>
         </div>
+        <div class="env-row">
+          <span class="env-label">기준기온 <b id="ambientLabel">24.0℃</b></span>
+          <div class="wind-controls">
+            <input type="number" id="ambientInput" min="-10" max="50" step="0.1" value="24" aria-label="기준기온(그늘·배경 기온, ℃)">
+            <button class="citybtn" id="btnAmbientReset" type="button" title="기본값 24℃로 되돌리기">기본값</button>
+          </div>
+        </div>
+        <p class="env-note">기준기온은 그날 <b>그늘이나 잔디밭에서 잰 배경 기온</b>입니다. 실측한 날의 값을 넣으면 지도의 절대 온도가 측정값과 같은 눈금이 되어 비교·보정이 쉬워집니다. 재질 사이의 온도차는 기준기온과 무관합니다.</p>
         <p class="env-note">낮 시간대는 태양열로 열섬이 심해지고, 밤에는 완화됩니다. 바람은 ① 상풍(upwind) 쪽 칸의 열을 하풍 쪽으로 더 강하게 옮기고, ② 도시 전체의 열을 주변 공기로 더 빨리 실어 나가 열섬 자체를 약하게 만듭니다.</p>
       </div>
 
@@ -1029,12 +1047,12 @@
           <div class="coef-row"><span>공원·녹지(증발산)</span><span id="coefPark">기준 대비 −3.5℃</span></div>
           <div class="coef-row"><span>물(하천·수역)</span><span id="coefWater">기준 대비 −5.5℃</span></div>
         </div>
-        <p class="science-note">각 칸의 온도는 지표 재질별 열원값을 격자 확산(diffusion) 방식으로 10회 반복 계산해 이웃 칸과 열이 섞이는 효과를 근사한 값입니다. 모델에 들어간 가정은 네 가지입니다. <b>① 시간대</b>: 태양열 세기를 0.25배(야간)~1.2배(오후 1~2시 정점)로 스케일링합니다. <b>② 바람의 이류</b>: 상풍 쪽 이웃 칸에 가중치를 더 줘 하풍 방향으로 열이 더 강하게 퍼집니다. <b>③ 열린 경계</b>: 격자 바깥은 기준기온(24℃)의 주변 공기로 보고 가장자리 칸이 그 공기와 열을 주고받습니다. 이 모델의 열은 이웃으로 1~2칸까지만 눈에 띄게 퍼지므로, 경계 효과도 가장 바깥 한두 줄이 약 0.1~0.7℃ 낮아지는 정도로 나타납니다(같은 이유로 공원 한 칸의 냉각 효과도 바로 옆 1~2칸까지입니다). <b>④ 환기 효과</b>: 바람이 셀수록 지표에서 공기로 열이 빠져나가는 속도가 빨라져 열섬 세기 자체가 최대 35%까지 줄어듭니다. <b>⑤ 저감 대책 재질</b>: 쿨루프는 지붕 반사율(알베도)을 높여 흡수하는 태양복사를 줄인 지붕, 차열포장은 표면 처리로 축열을 줄인 도로를 뜻합니다. 각각 원래 재질(건물 +5.5℃, 도로 +7.0℃)의 열원값을 <b>+2.5℃·+4.0℃</b>로 낮춰 잡았는데, 이는 문헌상 보고되는 표면온도 저감 폭을 이 모델의 상대 눈금으로 옮긴 <b>가정치</b>이지 인용 가능한 실측 계수가 아닙니다. 실측 보정 시에는 원래 재질(건물·도로)의 보정 배율을 그대로 따라갑니다. 실제 실외 실측값이 아니라 배치 전략을 비교하기 위한 상대적 모델이며, 아래 보정 기능으로 실제 측정 데이터와 맞춰볼 수 있습니다.</p>
+        <p class="science-note">각 칸의 온도는 지표 재질별 열원값을 격자 확산(diffusion) 방식으로 10회 반복 계산해 이웃 칸과 열이 섞이는 효과를 근사한 값입니다. 모델에 들어간 가정은 네 가지입니다. <b>① 시간대</b>: 태양열 세기를 0.25배(야간)~1.2배(오후 1~2시 정점)로 스케일링합니다. <b>② 바람의 이류</b>: 상풍 쪽 이웃 칸에 가중치를 더 줘 하풍 방향으로 열이 더 강하게 퍼집니다. <b>③ 열린 경계</b>: 격자 바깥은 <b>기준기온</b>(위 환경 설정에서 지정, 기본 24℃)의 주변 공기로 보고 가장자리 칸이 그 공기와 열을 주고받습니다. 이 모델의 열은 이웃으로 1~2칸까지만 눈에 띄게 퍼지므로, 경계 효과도 가장 바깥 한두 줄이 약 0.1~0.7℃ 낮아지는 정도로 나타납니다(같은 이유로 공원 한 칸의 냉각 효과도 바로 옆 1~2칸까지입니다). <b>④ 환기 효과</b>: 바람이 셀수록 지표에서 공기로 열이 빠져나가는 속도가 빨라져 열섬 세기 자체가 최대 35%까지 줄어듭니다. <b>⑤ 저감 대책 재질</b>: 쿨루프는 지붕 반사율(알베도)을 높여 흡수하는 태양복사를 줄인 지붕, 차열포장은 표면 처리로 축열을 줄인 도로를 뜻합니다. 각각 원래 재질(건물 +5.5℃, 도로 +7.0℃)의 열원값을 <b>+2.5℃·+4.0℃</b>로 낮춰 잡았는데, 이는 문헌상 보고되는 표면온도 저감 폭을 이 모델의 상대 눈금으로 옮긴 <b>가정치</b>이지 인용 가능한 실측 계수가 아닙니다. 실측 보정 시에는 원래 재질(건물·도로)의 보정 배율을 그대로 따라갑니다. 실제 실외 실측값이 아니라 배치 전략을 비교하기 위한 상대적 모델이며, 아래 보정 기능으로 실제 측정 데이터와 맞춰볼 수 있습니다.</p>
       </details>
 
       <details class="science" id="calibPanel">
         <summary>실측 온도로 계수 보정하기</summary>
-        <p class="science-note" style="margin-top:8px;">현장에서 재질별로 몇 지점씩 온도를 재고 평균을 낸 값을 넣어주세요(예: 아스팔트 3곳 평균). 비워두면 그 재질은 보정하지 않습니다. 최소 2개 재질 이상 입력하는 걸 추천해요.</p>
+        <p class="science-note" style="margin-top:8px;">먼저 위 <b>기준기온</b>에 그날 그늘에서 잰 배경 기온을 넣어주세요 — 절대 눈금이 맞아야 아래 보정이 재질 사이의 차이에 집중할 수 있습니다. 그다음 현장에서 재질별로 몇 지점씩 온도를 재고 평균을 낸 값을 넣어주세요(예: 아스팔트 3곳 평균). 비워두면 그 재질은 보정하지 않습니다. 최소 2개 재질 이상 입력하는 걸 추천해요.</p>
         <div class="calib-grid">
           <label>건물 실측 평균(℃) <input type="number" step="0.1" id="calibBuilding" placeholder="예: 32.4"></label>
           <label>도로 실측 평균(℃) <input type="number" step="0.1" id="calibRoad" placeholder="예: 34.1"></label>
@@ -1573,6 +1591,13 @@ function(t){t.__bidiEngine__=t.prototype.__bidiEngine__=function(t){var r,n,i,a,
   });
   var MOVABLE_KEYS = MATERIAL_KEYS.filter(function(k){ return MATERIALS[k].movable; });
 
+  // Background ("shade") air temperature the whole map is expressed relative to.
+  // Field measurements are taken on a particular day, so a team that measured a
+  // 31C afternoon needs the map on that scale before their readings and the
+  // simulation are even comparable -- this is an observation they enter, not a
+  // parameter the calibration fits, which would otherwise be one free
+  // parameter too many for the handful of measurements they can collect.
+  var AMBIENT = 24;
   var grid = new Array(N).fill("grass");
   var temps = new Float32Array(N);
   var currentBrush = "park";
@@ -1830,7 +1855,7 @@ function(t){t.__bidiEngine__=t.prototype.__bidiEngine__=function(t){var r,n,i,a,
   }
   function describeCell(i) {
     return (Math.floor(i / SIZE) + 1) + "행 " + (i % SIZE + 1) + "열, " +
-      MATERIAL_LABEL[grid[i]] + ", " + (24 + temps[i]).toFixed(1) + "도";
+      MATERIAL_LABEL[grid[i]] + ", " + (AMBIENT + temps[i]).toFixed(1) + "도";
   }
   // number keys follow the order the brush buttons appear in
   var BRUSH_KEYS = ["building", "road", "park", "water", "grass", "coolroof", "coolpave"];
@@ -1913,7 +1938,14 @@ function(t){t.__bidiEngine__=t.prototype.__bidiEngine__=function(t){var r,n,i,a,
     var h12 = h % 12; if (h12 === 0) h12 = 12;
     return period + " " + h12 + "시";
   }
+  var legendLowEl = document.getElementById("legendLow");
+  var legendMidEl = document.getElementById("legendMid");
+  var legendHighEl = document.getElementById("legendHigh");
   function updateEnvLabels() {
+    document.getElementById("ambientLabel").textContent = AMBIENT.toFixed(1) + "℃";
+    legendLowEl.textContent = (AMBIENT - DOMAIN).toFixed(0) + "℃ 저온";
+    legendMidEl.textContent = AMBIENT.toFixed(0) + "℃ 기준";
+    legendHighEl.textContent = (AMBIENT + DOMAIN).toFixed(0) + "℃ 고온";
     hourLabelEl.textContent = formatHour(hourOfDay);
     windLabelEl.textContent = windStrength === 0 ? "없음" : (WIND_LABELS[windDir] + " " + Math.round(windStrength * 100) + "%");
   }
@@ -1932,6 +1964,16 @@ function(t){t.__bidiEngine__=t.prototype.__bidiEngine__=function(t){var r,n,i,a,
     updateEnvLabels();
     render();
   });
+  var ambientInput = document.getElementById("ambientInput");
+  function setAmbient(v) {
+    if (!isFinite(v)) return;
+    AMBIENT = Math.max(-10, Math.min(50, v));
+    ambientInput.value = AMBIENT;
+    updateEnvLabels();
+    render();
+  }
+  ambientInput.addEventListener("change", function(e){ setAmbient(parseFloat(e.target.value)); });
+  document.getElementById("btnAmbientReset").addEventListener("click", function(){ setAmbient(24); });
   updateEnvLabels();
 
   // ---- render ----
@@ -1944,7 +1986,7 @@ function(t){t.__bidiEngine__=t.prototype.__bidiEngine__=function(t){var r,n,i,a,
       cellEls[i].style.background = hex;
       var valEl = cellEls[i].querySelector(".val");
       if (showNums) {
-        valEl.textContent = (24 + temps[i]).toFixed(1);
+        valEl.textContent = (AMBIENT + temps[i]).toFixed(1);
         valEl.style.color = rgbLuminance(rgb) > 0.55 ? "#111" : "#fff";
       } else {
         valEl.textContent = "";
@@ -2397,9 +2439,9 @@ function(t){t.__bidiEngine__=t.prototype.__bidiEngine__=function(t){var r,n,i,a,
   function updateStatsPanel() {
     var s = occupiedStats(grid, temps);
     var parkCount = grid.filter(function(t){ return t === "park"; }).length;
-    document.getElementById("statAvg").innerHTML = (24 + s.avg).toFixed(1) + "<small>℃</small>";
-    document.getElementById("statMax").innerHTML = (24 + s.max).toFixed(1) + "<small>℃</small>";
-    document.getElementById("statMin").innerHTML = (24 + s.min).toFixed(1) + "<small>℃</small>";
+    document.getElementById("statAvg").innerHTML = (AMBIENT + s.avg).toFixed(1) + "<small>℃</small>";
+    document.getElementById("statMax").innerHTML = (AMBIENT + s.max).toFixed(1) + "<small>℃</small>";
+    document.getElementById("statMin").innerHTML = (AMBIENT + s.min).toFixed(1) + "<small>℃</small>";
     document.getElementById("statGreen").innerHTML = ((parkCount / N) * 100).toFixed(0) + "<small>%</small>";
     document.getElementById("parkCount").textContent = parkCount;
     return { avg: s.avg, parkCount: parkCount };
@@ -2623,9 +2665,12 @@ function(t){t.__bidiEngine__=t.prototype.__bidiEngine__=function(t){var r,n,i,a,
   MATERIAL_KEYS.forEach(function(k){ BASE_SOURCE[k] = MATERIALS[k].base; });
   var lastOptimizeResult = null;
   var lastCalibResult = null;
+  // Wide enough that a hot measurement day or an unusual surface can still be
+  // reached; a fit that lands ON a bound is reported as such rather than being
+  // presented as if the search had converged.
   var CALIB_RANGES = {
-    building: [0.4, 2.2], road: [0.4, 2.2],
-    park: [0.3, 2.5], water: [0.3, 2.5]
+    building: [0.2, 3.5], road: [0.2, 3.5],
+    park: [0.2, 3.5], water: [0.2, 3.5]
   };
   var coefLabelEl = {};
   MATERIAL_KEYS.forEach(function(k){
@@ -2668,7 +2713,7 @@ function(t){t.__bidiEngine__=t.prototype.__bidiEngine__=function(t){var r,n,i,a,
     var avgByType = perTypeAvgTemp(grid, t);
     var err = 0;
     activeTypes.forEach(function(ty){
-      var predicted = 24 + (avgByType[ty] || 0);
+      var predicted = AMBIENT + (avgByType[ty] || 0);
       var diff = predicted - measured[ty];
       err += diff * diff;
     });
@@ -2686,7 +2731,7 @@ function(t){t.__bidiEngine__=t.prototype.__bidiEngine__=function(t){var r,n,i,a,
     var n = activeTypes.length;
     var sumAbs = 0, sumSq = 0, meanMeas = 0;
     var pairs = activeTypes.map(function(ty){
-      var predicted = 24 + (avgByType[ty] || 0);
+      var predicted = AMBIENT + (avgByType[ty] || 0);
       return { predicted: predicted, measured: measured[ty] };
     });
     pairs.forEach(function(p){ meanMeas += p.measured; });
@@ -2756,6 +2801,14 @@ function(t){t.__bidiEngine__=t.prototype.__bidiEngine__=function(t){var r,n,i,a,
       return "<tr><td>" + label + "</td><td>" + before.toFixed(2) + "</td><td>" + after.toFixed(2) + "</td></tr>";
     }).join("");
 
+    var pinned = activeTypes.filter(function(ty){
+      var r = CALIB_RANGES[ty];
+      return mult[ty] <= r[0] * 1.001 || mult[ty] >= r[1] * 0.999;
+    });
+    var pinnedNote = pinned.length
+      ? "<div style=\"color:var(--heat-hot); margin-top:6px;\">※ " + pinned.map(function(t){ return MATERIAL_LABEL[t]; }).join(", ") +
+        " 계수가 탐색 범위 끝에 걸렸습니다. 배율만으로는 실측값에 닿지 못한다는 뜻이니, 위 <b>기준기온</b>이 측정한 날의 배경 기온과 맞는지 먼저 확인해 주세요.</div>"
+      : "";
     var skipNote = skipped.length
       ? "<div style=\"color:var(--ink-mute); margin-top:6px;\">※ 지금 격자에 없는 재질(" + skipped.map(function(t){ return {building:"건물",road:"도로",park:"공원",water:"물"}[t]; }).join(", ") + ")은 제외했습니다.</div>"
       : "";
@@ -2766,7 +2819,7 @@ function(t){t.__bidiEngine__=t.prototype.__bidiEngine__=function(t){var r,n,i,a,
     resultEl.innerHTML =
       "<table><thead><tr><th>재질</th><th>보정 전 계수</th><th>보정 후 계수</th></tr></thead><tbody>" + rows + "</tbody></table>" +
       "<div class=\"err-line\">RMSE " + metricsBefore.rmse.toFixed(2) + "℃ → " + metricsAfter.rmse.toFixed(2) + "℃</div>" +
-      "<div style=\"color:var(--ink-dim); margin-top:4px;\">MAE " + metricsAfter.mae.toFixed(2) + "℃ · " + r2Line + " (n=" + metricsAfter.n + ")</div>" + skipNote;
+      "<div style=\"color:var(--ink-dim); margin-top:4px;\">MAE " + metricsAfter.mae.toFixed(2) + "℃ · " + r2Line + " (n=" + metricsAfter.n + ") · 기준기온 " + AMBIENT.toFixed(1) + "℃</div>" + pinnedNote + skipNote;
     lastCalibResult = { metricsBefore: metricsBefore, metricsAfter: metricsAfter, types: activeTypes.slice() };
 
     updateCoefTable();
@@ -2853,6 +2906,8 @@ function(t){t.__bidiEngine__=t.prototype.__bidiEngine__=function(t){var r,n,i,a,
     row("최고기온", document.getElementById("statMax").textContent.replace("℃","") + " ℃");
     row("최저기온", document.getElementById("statMin").textContent.replace("℃","") + " ℃");
     row("녹지 비율", document.getElementById("statGreen").textContent.replace("%","") + " %");
+    row("기준기온(배경)", AMBIENT.toFixed(1) + " ℃");
+    row("측정 조건", formatHour(hourOfDay) + " · 바람 " + (windStrength === 0 ? "없음" : WIND_LABELS[windDir] + " " + Math.round(windStrength*100) + "%"));
     y += 8;
 
     // city preset citation, if used
@@ -3229,7 +3284,7 @@ function(t){t.__bidiEngine__=t.prototype.__bidiEngine__=function(t){var r,n,i,a,
     rows.push("# 열원계수(℃)," + MATERIAL_KEYS.map(function(t){
       return t + "=" + SOURCE[t].toFixed(2);
     }).join(" "));
-    rows.push("# 기준기온(℃),24.00");
+    rows.push("# 기준기온(℃)," + AMBIENT.toFixed(2));
     rows.push("# 생성시각," + new Date().toLocaleString("ko-KR"));
     rows.push(["행(y)", "열(x)", "재질", "예상기온(℃)", "기준대비(℃)"].join(","));
     for (var i = 0; i < N; i++) {
@@ -3237,7 +3292,7 @@ function(t){t.__bidiEngine__=t.prototype.__bidiEngine__=function(t){var r,n,i,a,
         Math.floor(i / SIZE) + 1,
         (i % SIZE) + 1,
         MATERIAL_LABEL[grid[i]],
-        (24 + temps[i]).toFixed(2),
+        (AMBIENT + temps[i]).toFixed(2),
         temps[i].toFixed(2)
       ].join(","));
     }
@@ -3449,16 +3504,16 @@ function(t){t.__bidiEngine__=t.prototype.__bidiEngine__=function(t){var r,n,i,a,
       deltaLine.style.display = "flex";
       // two decimals here (the stat cards use one): a placement-only change
       // moves the average by tenths, and "28.2 -> 28.1" would hide most of it
-      document.getElementById("deltaBefore").textContent = (24 + beforeAvg).toFixed(2) + "℃";
-      document.getElementById("deltaAfter").textContent = (24 + bestAvg).toFixed(2) + "℃";
+      document.getElementById("deltaBefore").textContent = (AMBIENT + beforeAvg).toFixed(2) + "℃";
+      document.getElementById("deltaAfter").textContent = (AMBIENT + bestAvg).toFixed(2) + "℃";
       document.getElementById("deltaGood").textContent = improved > 0.02
         ? ("−" + improved.toFixed(2) + "℃ 개선")
         : "추가 개선 어려움 (이미 근접 최적)";
       chartStatus.textContent = "완료";
 
       var afterSnapshot = snapshotGridCanvas(best, computeTemps(best));
-      showComparisonImage(beforeSnapshot, afterSnapshot, 24 + beforeAvg, 24 + bestAvg);
-      lastOptimizeResult = { before: 24 + beforeAvg, after: 24 + bestAvg, improved: improved };
+      showComparisonImage(beforeSnapshot, afterSnapshot, AMBIENT + beforeAvg, AMBIENT + bestAvg);
+      lastOptimizeResult = { before: AMBIENT + beforeAvg, after: AMBIENT + bestAvg, improved: improved };
       optimizing = false;
       btnOptimize.disabled = false;
     }
@@ -3715,6 +3770,7 @@ function(t){t.__bidiEngine__=t.prototype.__bidiEngine__=function(t){var r,n,i,a,
   function controlSummary() {
     return "시간대 " + formatHour(hourOfDay) +
       " · 바람 " + (windStrength === 0 ? "없음" : WIND_LABELS[windDir] + " " + Math.round(windStrength*100) + "%") +
+      " · 기준기온 " + AMBIENT.toFixed(1) + "℃" +
       " · 격자 " + SIZE + "×" + SIZE;
   }
 
@@ -3732,7 +3788,7 @@ function(t){t.__bidiEngine__=t.prototype.__bidiEngine__=function(t){var r,n,i,a,
       prepare: function(){ return { comp: baseComposition(grid) }; },
       run: function(v, ctxObj){
         var g = cityWithParkCount(grid, Math.round(v / 100 * N), ctxObj.comp);
-        return 24 + occupiedStats(g, computeTemps(g)).avg;
+        return AMBIENT + occupiedStats(g, computeTemps(g)).avg;
       },
       conclude: function(res){
         var first = res.points[0], last = res.points[res.points.length - 1];
@@ -3763,7 +3819,7 @@ function(t){t.__bidiEngine__=t.prototype.__bidiEngine__=function(t){var r,n,i,a,
       label: function(v){ return String(v); },
       prepare: function(){ return {}; },
       run: function(v){
-        return 24 + occupiedStats(grid, computeTemps(grid, { hour: v })).avg;
+        return AMBIENT + occupiedStats(grid, computeTemps(grid, { hour: v })).avg;
       },
       conclude: function(res){
         var hot = res.points[0], cold = res.points[0];
@@ -3789,7 +3845,7 @@ function(t){t.__bidiEngine__=t.prototype.__bidiEngine__=function(t){var r,n,i,a,
       label: function(v){ return String(v); },
       prepare: function(){ return {}; },
       run: function(v){
-        return 24 + occupiedStats(grid, computeTemps(grid, { windStrength: v / 100 })).avg;
+        return AMBIENT + occupiedStats(grid, computeTemps(grid, { windStrength: v / 100 })).avg;
       },
       conclude: function(res){
         var first = res.points[0], last = res.points[res.points.length - 1];
@@ -3840,7 +3896,7 @@ function(t){t.__bidiEngine__=t.prototype.__bidiEngine__=function(t){var r,n,i,a,
           var pool = shuffleInPlace(ctxObj.pools[v].slice());
           for (var i = 0; i < ctxObj.budget && i < pool.length; i++) g[pool[i]] = v;
         }
-        return 24 + avgOverIndices(computeTemps(g), ctxObj.occIdx);
+        return AMBIENT + avgOverIndices(computeTemps(g), ctxObj.occIdx);
       },
       conclude: function(res){
         var byLabel = {};
@@ -3890,7 +3946,7 @@ function(t){t.__bidiEngine__=t.prototype.__bidiEngine__=function(t){var r,n,i,a,
         var g = (v === "ai")
           ? annealParks(placeParksByShape(ctxObj.base, ctxObj.parkCount, "random"), 420)
           : placeParksByShape(ctxObj.base, ctxObj.parkCount, v);
-        return 24 + occupiedStats(g, computeTemps(g)).avg;
+        return AMBIENT + occupiedStats(g, computeTemps(g)).avg;
       },
       conclude: function(res){
         var best = res.points[0], worst = res.points[0];
@@ -4340,6 +4396,7 @@ function(t){t.__bidiEngine__=t.prototype.__bidiEngine__=function(t){var r,n,i,a,
         windDir: windDir,
         windStrength: windStrength,
         source: SOURCE,
+        ambient: AMBIENT,
         isoRotation: isoRotation,
         labResults: labResults
       }));
@@ -4360,6 +4417,7 @@ function(t){t.__bidiEngine__=t.prototype.__bidiEngine__=function(t){var r,n,i,a,
           if (typeof state.source[k] === "number") SOURCE[k] = state.source[k];
         });
       }
+      if (typeof state.ambient === "number") AMBIENT = state.ambient;
       if (typeof state.isoRotation === "number") isoRotation = state.isoRotation;
       // restored experiments keep the control conditions they were run under
       // printed alongside them, so a stale result is visible as stale rather
@@ -4395,6 +4453,7 @@ function(t){t.__bidiEngine__=t.prototype.__bidiEngine__=function(t){var r,n,i,a,
     document.getElementById("hourSlider").value = hourOfDay;
     document.getElementById("windDir").value = windDir;
     document.getElementById("windStrength").value = Math.round(windStrength * 100);
+    ambientInput.value = AMBIENT;
     updateEnvLabels();
     updateCoefTable();
     render();
