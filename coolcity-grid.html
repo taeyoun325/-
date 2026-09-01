@@ -816,6 +816,42 @@
   .calib-result th:first-child, .calib-result td:first-child{ text-align:left; font-family:"Gothic A1",sans-serif; }
   .calib-result .err-line{ margin-top:8px; color:var(--good); font-weight:600; }
 
+  .slot-row{ display:flex; flex-direction:column; gap:6px; margin-top:10px; }
+  .slot{ display:flex; align-items:center; gap:5px; }
+  .slot-tag{
+    flex:0 0 20px; text-align:center;
+    font:700 11px "IBM Plex Mono",monospace;
+    color:var(--accent-text);
+  }
+  .slot-name{
+    flex:1; min-width:0;
+    padding:5px 7px; border:1px solid var(--line); border-radius:7px;
+    background:var(--panel-2); color:var(--ink);
+    font:500 11.5px "Gothic A1",sans-serif;
+  }
+  .slot-btn{
+    flex:0 0 auto;
+    font:700 10.5px "Gothic A1",sans-serif;
+    border:1px solid var(--line); border-radius:7px;
+    background:var(--panel-2); color:var(--ink-dim);
+    padding:5px 7px; cursor:pointer;
+  }
+  .slot-btn:hover:not(:disabled){ color:var(--ink); border-color:var(--line-strong); }
+  .slot-btn:disabled{ opacity:.35; cursor:not-allowed; }
+  .slot-compare{ margin-top:12px; }
+  .slot-table{ width:100%; border-collapse:collapse; font-size:11px; }
+  .slot-table th, .slot-table td{
+    padding:5px 6px; border-bottom:1px solid var(--line); text-align:right;
+    font-family:"IBM Plex Mono",monospace; font-variant-numeric:tabular-nums; color:var(--ink-dim);
+  }
+  .slot-table th{ color:var(--ink-mute); font-weight:600; }
+  .slot-table td:first-child, .slot-table th:first-child{
+    text-align:left; font-family:"Gothic A1",sans-serif; color:var(--ink);
+    max-width:110px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;
+  }
+  .slot-table tr.current td:first-child{ color:var(--ink-mute); font-style:italic; }
+  .slot-table tr.best td{ color:var(--accent-text); font-weight:700; }
+
   .summary-block{ margin-top:16px; }
   .summary-hint{
     margin:8px 0 0;
@@ -1106,6 +1142,13 @@
         </div>
         <button class="btn btn-primary" id="btnCalibrate" style="width:100%; margin-top:10px;">보정 실행</button>
         <div id="calibResult" class="calib-result" style="display:none;"></div>
+      </details>
+
+      <details class="science" id="scenarioPanel">
+        <summary>설계안 저장·비교 (A / B / C)</summary>
+        <p class="science-note" style="margin-top:8px;">지금 캔버스 상태를 슬롯에 저장해 두고 다른 설계안과 지표를 나란히 비교합니다. 예: <b>A</b> 우리 동네 현재 모습 · <b>B</b> 녹지 확대안 · <b>C</b> 쿨루프·차열포장 적용안.</p>
+        <div class="slot-row" id="slotRow"></div>
+        <div class="slot-compare" id="slotCompare"></div>
       </details>
 
       <div class="summary-block">
@@ -2022,6 +2065,7 @@ function(t){t.__bidiEngine__=t.prototype.__bidiEngine__=function(t){var r,n,i,a,
   updateEnvLabels();
 
   // ---- render ----
+  var scenarioPanelEl = document.getElementById("scenarioPanel");
   function render() {
     temps = computeTemps(grid);
     if (!heatStops) refreshHeatStops();
@@ -2039,6 +2083,7 @@ function(t){t.__bidiEngine__=t.prototype.__bidiEngine__=function(t){var r,n,i,a,
     }
     updateStatsPanel();
     drawIso();
+    if (scenarioPanelEl && scenarioPanelEl.open) renderSlotCompare();
     scheduleSave();
   }
 
@@ -3166,7 +3211,7 @@ function(t){t.__bidiEngine__=t.prototype.__bidiEngine__=function(t){var r,n,i,a,
     ctx.font = "700 12px 'Gothic A1', sans-serif";
     ctx.fillText("실험 방법", pad, y + 10);
     y += 20;
-    para(stripTags(res.method || ""), "400 11px 'Gothic A1', sans-serif", "#767a6c", 16);
+    para(stripTags(res.method || "(실험 방법 기록 없음)"), "400 11px 'Gothic A1', sans-serif", "#767a6c", 16);
     y += 14;
 
     var chart = labChartToCanvas(res, 2, { noTitle: true });
@@ -3180,7 +3225,7 @@ function(t){t.__bidiEngine__=t.prototype.__bidiEngine__=function(t){var r,n,i,a,
     ctx.font = "700 12px 'Gothic A1', sans-serif";
     ctx.fillText("결과 해석", pad, y + 10);
     y += 20;
-    para(stripTags(res.conclusion), "400 11.5px 'Gothic A1', sans-serif", "#55594c", 17);
+    para(stripTags(res.conclusion || "(해석 기록 없음 — 실험을 다시 실행하면 채워집니다)"), "400 11.5px 'Gothic A1', sans-serif", "#55594c", 17);
     y += 16;
 
     ctx.fillStyle = "#1a1d18";
@@ -3444,10 +3489,14 @@ function(t){t.__bidiEngine__=t.prototype.__bidiEngine__=function(t){var r,n,i,a,
     el.className = "save-status" + (cls ? " " + cls : "");
     el.textContent = text;
   }
-  function wireSaveButton(btnId, statusId, filename, getBlob) {
+  function wireSaveButton(btnId, statusId, filename, getBlob, isReady) {
     var btn = document.getElementById(btnId);
     var statusEl = document.getElementById(statusId);
     btn.addEventListener("click", async function(){
+      if (isReady && !isReady()) {
+        setSaveStatus(statusEl, "err", "먼저 보고서를 생성해 주세요");
+        return;
+      }
       btn.disabled = true;
       setSaveStatus(statusEl, "", "저장 중…");
       var blob = await getBlob();
@@ -3470,7 +3519,7 @@ function(t){t.__bidiEngine__=t.prototype.__bidiEngine__=function(t){var r,n,i,a,
   });
   wireSaveButton("btnSavePdf", "savePdfStatus", "쿨시티그리드_탐구보고서.pdf", function(){
     return Promise.resolve(lastPdfBlob);
-  });
+  }, function(){ return !!lastPdfBlob; });
 
   // ---- raw grid data export ----
   // Long format (one row per cell) rather than an 18x18 matrix: it is what a
@@ -4607,6 +4656,99 @@ function(t){t.__bidiEngine__=t.prototype.__bidiEngine__=function(t){var r,n,i,a,
 
   selectExperiment("green");
 
+  // ---- 설계안 보관함 (A / B / C) ----
+  // The experiments sweep one variable automatically; this is the other half of
+  // an inquiry -- holding a team's OWN designs against each other. Slots store
+  // the layout only, never the numbers: every comparison is recomputed under
+  // whatever time-of-day, wind and calibration are set right now, so two
+  // designs are never compared across different conditions by accident.
+  var SCENARIO_KEYS = ["A", "B", "C"];
+  var scenarios = {};
+  var slotRowEl = document.getElementById("slotRow");
+  var slotCompareEl = document.getElementById("slotCompare");
+
+  function scenarioStats(g) {
+    var t = computeTemps(g);
+    var st = occupiedStats(g, t);
+    var counts = {};
+    g.forEach(function(ty){ counts[ty] = (counts[ty] || 0) + 1; });
+    return {
+      avg: AMBIENT + st.avg,
+      max: AMBIENT + st.max,
+      green: ((counts.park || 0) / N) * 100,
+      treated: (((counts.coolroof || 0) + (counts.coolpave || 0)) / N) * 100
+    };
+  }
+
+  function renderSlotRow() {
+    slotRowEl.innerHTML = SCENARIO_KEYS.map(function(k){
+      var sc = scenarios[k];
+      return "<div class=\"slot\">" +
+        "<span class=\"slot-tag\">" + k + "</span>" +
+        "<input class=\"slot-name\" id=\"slotName" + k + "\" maxlength=\"18\" placeholder=\"설계안 이름\" value=\"" +
+          (sc ? String(sc.name).replace(/\"/g, "&quot;") : "") + "\">" +
+        "<button class=\"slot-btn\" data-act=\"save\" data-slot=\"" + k + "\">저장</button>" +
+        "<button class=\"slot-btn\" data-act=\"load\" data-slot=\"" + k + "\"" + (sc ? "" : " disabled") + ">불러오기</button>" +
+        "<button class=\"slot-btn\" data-act=\"clear\" data-slot=\"" + k + "\"" + (sc ? "" : " disabled") + " aria-label=\"" + k + " 슬롯 비우기\">×</button>" +
+        "</div>";
+    }).join("");
+  }
+
+  function renderSlotCompare() {
+    var filled = SCENARIO_KEYS.filter(function(k){ return scenarios[k]; });
+    if (!filled.length) {
+      slotCompareEl.innerHTML = "<p class=\"science-note\">저장된 설계안이 없습니다. 캔버스를 원하는 상태로 만든 뒤 <b>저장</b>을 눌러보세요.</p>";
+      return;
+    }
+    var rows = [{ label: "지금 캔버스", stats: scenarioStats(grid), current: true }];
+    filled.forEach(function(k){
+      rows.push({ label: k + ". " + scenarios[k].name, stats: scenarioStats(scenarios[k].grid) });
+    });
+    var best = rows.reduce(function(a, b){ return b.stats.avg < a.stats.avg ? b : a; });
+    slotCompareEl.innerHTML =
+      "<table class=\"slot-table\"><thead><tr><th>설계안</th><th>평균(℃)</th><th>최고(℃)</th><th>녹지%</th><th>대책%</th></tr></thead><tbody>" +
+      rows.map(function(r){
+        return "<tr class=\"" + (r === best ? "best" : "") + (r.current ? " current" : "") + "\">" +
+          "<td>" + r.label + "</td>" +
+          "<td>" + r.stats.avg.toFixed(2) + "</td>" +
+          "<td>" + r.stats.max.toFixed(2) + "</td>" +
+          "<td>" + r.stats.green.toFixed(0) + "</td>" +
+          "<td>" + r.stats.treated.toFixed(0) + "</td></tr>";
+      }).join("") +
+      "</tbody></table>" +
+      "<p class=\"science-note\">모든 설계안을 <b>지금 설정된 같은 조건</b>(" + controlSummary() + ")으로 다시 계산해 비교합니다. 시간대나 바람을 바꾸면 표도 함께 바뀝니다.</p>";
+  }
+
+  function refreshScenarioUI() {
+    renderSlotRow();
+    renderSlotCompare();
+  }
+
+  slotRowEl.addEventListener("click", function(e){
+    var btn = e.target.closest(".slot-btn");
+    if (!btn) return;
+    var k = btn.dataset.slot;
+    if (btn.dataset.act === "save") {
+      var nameEl = document.getElementById("slotName" + k);
+      scenarios[k] = { name: (nameEl.value || "").trim() || ("설계안 " + k), grid: grid.slice() };
+    } else if (btn.dataset.act === "load") {
+      if (!scenarios[k]) return;
+      grid = scenarios[k].grid.slice();
+      clearCityPresetUI();
+      render();
+      commitGridChange();
+    } else if (btn.dataset.act === "clear") {
+      delete scenarios[k];
+    }
+    refreshScenarioUI();
+    scheduleSave();
+  });
+
+  // keep the comparison honest when the conditions move under it
+  document.getElementById("scenarioPanel").addEventListener("toggle", function(){
+    if (this.open) renderSlotCompare();
+  });
+
   // ---- theme change: recolor cells if user or OS toggles theme ----
   var mq = window.matchMedia("(prefers-color-scheme: dark)");
   function onThemeMaybeChanged(){ refreshHeatStops(); render(); renderLabChart(); }
@@ -4632,6 +4774,7 @@ function(t){t.__bidiEngine__=t.prototype.__bidiEngine__=function(t){var r,n,i,a,
         windStrength: windStrength,
         source: SOURCE,
         ambient: AMBIENT,
+        scenarios: scenarios,
         isoRotation: isoRotation,
         labResults: labResults
       }));
@@ -4643,6 +4786,12 @@ function(t){t.__bidiEngine__=t.prototype.__bidiEngine__=function(t){var r,n,i,a,
       if (!raw) return false;
       var state = JSON.parse(raw);
       if (!state || !Array.isArray(state.grid) || state.grid.length !== N) return false;
+      // reject a grid containing anything the materials table doesn't know:
+      // an unrecognised cell would throw on the first MATERIALS[...] lookup and
+      // take the page down, which is worse than starting fresh
+      for (var gi = 0; gi < state.grid.length; gi++) {
+        if (!MATERIALS[state.grid[gi]]) return false;
+      }
       grid = state.grid;
       if (typeof state.hourOfDay === "number") hourOfDay = state.hourOfDay;
       if (state.windDir) windDir = state.windDir;
@@ -4653,6 +4802,14 @@ function(t){t.__bidiEngine__=t.prototype.__bidiEngine__=function(t){var r,n,i,a,
         });
       }
       if (typeof state.ambient === "number") AMBIENT = state.ambient;
+      if (state.scenarios && typeof state.scenarios === "object") {
+        SCENARIO_KEYS.forEach(function(k){
+          var sc = state.scenarios[k];
+          if (!sc || !Array.isArray(sc.grid) || sc.grid.length !== N) return;
+          if (sc.grid.some(function(c){ return !MATERIALS[c]; })) return;
+          scenarios[k] = { name: String(sc.name || ("설계안 " + k)), grid: sc.grid };
+        });
+      }
       if (typeof state.isoRotation === "number") isoRotation = state.isoRotation;
       // restored experiments keep the control conditions they were run under
       // printed alongside them, so a stale result is visible as stale rather
@@ -4698,5 +4855,6 @@ function(t){t.__bidiEngine__=t.prototype.__bidiEngine__=function(t){var r,n,i,a,
     randomCity();
   }
   commitGridChange();
+  refreshScenarioUI();
 })();
 </script>
