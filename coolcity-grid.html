@@ -37,6 +37,8 @@
     --mat-park:     #1f7a5c;
     --mat-water:    #2a78d6;
     --mat-grass:    #b9c7a4;
+    --mat-coolroof: #d7dee6;
+    --mat-coolpave: #9aa0a8;
   }
   @media (prefers-color-scheme: dark){
     :root:not([data-theme="light"]){
@@ -68,6 +70,8 @@
       --mat-park:     #3ddc97;
       --mat-water:    #3987e5;
       --mat-grass:    #4a5240;
+      --mat-coolroof: #cfd6de;
+      --mat-coolpave: #767c84;
     }
   }
   :root[data-theme="dark"]{
@@ -99,6 +103,8 @@
     --mat-park:     #3ddc97;
     --mat-water:    #3987e5;
     --mat-grass:    #4a5240;
+    --mat-coolroof: #cfd6de;
+    --mat-coolpave: #767c84;
   }
 
   *{ box-sizing:border-box; }
@@ -237,6 +243,14 @@
     outline-offset:2px;
   }
 
+  .toolbar-measures{ align-items:center; }
+  .toolbar-label{
+    font:600 10.5px "IBM Plex Mono", monospace;
+    letter-spacing:.08em;
+    color:var(--ink-mute);
+    text-transform:uppercase;
+    margin-right:2px;
+  }
   .actions{ display:flex; flex-wrap:wrap; gap:8px; margin-bottom:14px; }
   .import-note{
     margin:-6px 0 14px;
@@ -833,6 +847,7 @@
       <li><b>AI 최적화 실행</b>으로 녹지를 어디에 배치하면 열섬이 가장 줄어드는지 찾아보세요</li>
       <li><b>3D 도시 생성</b>으로 입체 화면을 확인해보세요 (시간대·바람도 반영됩니다)</li>
       <li>실측 온도가 있다면 <b>계수 보정</b>으로 정확도를 높이고, 아래 <b>탐구 실험실</b>에서 변인을 하나씩 바꿔가며 그래프를 뽑아보세요</li>
+      <li><b>쿨루프·차열포장</b> 브러시로 건물 지붕과 도로 표면만 바꿔보고, 실험 ⑤에서 같은 면적일 때 어떤 대책이 가장 효과적인지 비교해보세요</li>
       <li>마우스가 없어도 됩니다 — 격자에서 <b>방향키</b>로 이동, <b>스페이스</b>로 칠하기, <b>숫자키 1~5</b>로 브러시 전환, <b>Ctrl+Z</b>로 되돌리기</li>
     </ol>
   </div>
@@ -852,6 +867,12 @@
         <button class="brush" data-type="park" aria-pressed="true"><span class="swatch" style="background:var(--mat-park)"></span>공원·녹지</button>
         <button class="brush" data-type="water" aria-pressed="false"><span class="swatch" style="background:var(--mat-water)"></span>물(하천)</button>
         <button class="brush" data-type="grass" aria-pressed="false"><span class="swatch" style="background:var(--mat-grass)"></span>빈터</button>
+      </div>
+
+      <div class="toolbar toolbar-measures" role="group" aria-label="열섬 저감 대책 브러시">
+        <span class="toolbar-label">저감 대책</span>
+        <button class="brush" data-type="coolroof" aria-pressed="false" title="고반사 도료를 칠한 지붕(쿨루프). 건물을 그대로 두고 지붕 반사율만 높인 경우입니다."><span class="swatch" style="background:var(--mat-coolroof)"></span>쿨루프</button>
+        <button class="brush" data-type="coolpave" aria-pressed="false" title="차열성 포장으로 바꾼 도로. 아스팔트를 걷어내지 않고 표면 처리만 바꾼 경우입니다."><span class="swatch" style="background:var(--mat-coolpave)"></span>차열포장</button>
       </div>
 
       <div class="actions">
@@ -1002,11 +1023,13 @@
         <div class="coef-table" id="coefTable">
           <div class="coef-row"><span>건물(고밀 구조물)</span><span id="coefBuilding">기준 대비 +5.5℃</span></div>
           <div class="coef-row"><span>도로(아스팔트)</span><span id="coefRoad">기준 대비 +7.0℃</span></div>
+          <div class="coef-row"><span>쿨루프(고반사 지붕)</span><span id="coefCoolroof">기준 대비 +2.5℃</span></div>
+          <div class="coef-row"><span>차열포장 도로</span><span id="coefCoolpave">기준 대비 +4.0℃</span></div>
           <div class="coef-row"><span>빈터(나지)</span><span id="coefGrass">기준 대비 −1.0℃</span></div>
           <div class="coef-row"><span>공원·녹지(증발산)</span><span id="coefPark">기준 대비 −3.5℃</span></div>
           <div class="coef-row"><span>물(하천·수역)</span><span id="coefWater">기준 대비 −5.5℃</span></div>
         </div>
-        <p class="science-note">각 칸의 온도는 지표 재질별 열원값을 격자 확산(diffusion) 방식으로 10회 반복 계산해 이웃 칸과 열이 섞이는 효과를 근사한 값입니다. 모델에 들어간 가정은 네 가지입니다. <b>① 시간대</b>: 태양열 세기를 0.25배(야간)~1.2배(오후 1~2시 정점)로 스케일링합니다. <b>② 바람의 이류</b>: 상풍 쪽 이웃 칸에 가중치를 더 줘 하풍 방향으로 열이 더 강하게 퍼집니다. <b>③ 열린 경계</b>: 격자 바깥은 기준기온(24℃)의 주변 공기로 보고 가장자리 칸이 그 공기와 열을 주고받습니다. 이 모델의 열은 이웃으로 1~2칸까지만 눈에 띄게 퍼지므로, 경계 효과도 가장 바깥 한두 줄이 약 0.1~0.7℃ 낮아지는 정도로 나타납니다(같은 이유로 공원 한 칸의 냉각 효과도 바로 옆 1~2칸까지입니다). <b>④ 환기 효과</b>: 바람이 셀수록 지표에서 공기로 열이 빠져나가는 속도가 빨라져 열섬 세기 자체가 최대 35%까지 줄어듭니다. 실제 실외 실측값이 아니라 배치 전략을 비교하기 위한 상대적 모델이며, 아래 보정 기능으로 실제 측정 데이터와 맞춰볼 수 있습니다.</p>
+        <p class="science-note">각 칸의 온도는 지표 재질별 열원값을 격자 확산(diffusion) 방식으로 10회 반복 계산해 이웃 칸과 열이 섞이는 효과를 근사한 값입니다. 모델에 들어간 가정은 네 가지입니다. <b>① 시간대</b>: 태양열 세기를 0.25배(야간)~1.2배(오후 1~2시 정점)로 스케일링합니다. <b>② 바람의 이류</b>: 상풍 쪽 이웃 칸에 가중치를 더 줘 하풍 방향으로 열이 더 강하게 퍼집니다. <b>③ 열린 경계</b>: 격자 바깥은 기준기온(24℃)의 주변 공기로 보고 가장자리 칸이 그 공기와 열을 주고받습니다. 이 모델의 열은 이웃으로 1~2칸까지만 눈에 띄게 퍼지므로, 경계 효과도 가장 바깥 한두 줄이 약 0.1~0.7℃ 낮아지는 정도로 나타납니다(같은 이유로 공원 한 칸의 냉각 효과도 바로 옆 1~2칸까지입니다). <b>④ 환기 효과</b>: 바람이 셀수록 지표에서 공기로 열이 빠져나가는 속도가 빨라져 열섬 세기 자체가 최대 35%까지 줄어듭니다. <b>⑤ 저감 대책 재질</b>: 쿨루프는 지붕 반사율(알베도)을 높여 흡수하는 태양복사를 줄인 지붕, 차열포장은 표면 처리로 축열을 줄인 도로를 뜻합니다. 각각 원래 재질(건물 +5.5℃, 도로 +7.0℃)의 열원값을 <b>+2.5℃·+4.0℃</b>로 낮춰 잡았는데, 이는 문헌상 보고되는 표면온도 저감 폭을 이 모델의 상대 눈금으로 옮긴 <b>가정치</b>이지 인용 가능한 실측 계수가 아닙니다. 실측 보정 시에는 원래 재질(건물·도로)의 보정 배율을 그대로 따라갑니다. 실제 실외 실측값이 아니라 배치 전략을 비교하기 위한 상대적 모델이며, 아래 보정 기능으로 실제 측정 데이터와 맞춰볼 수 있습니다.</p>
       </details>
 
       <details class="science" id="calibPanel">
@@ -1072,6 +1095,7 @@
       <button class="lab-tab" data-exp="hour" role="tab" aria-selected="false">② 시간대 → 기온</button>
       <button class="lab-tab" data-exp="wind" role="tab" aria-selected="false">③ 바람 세기 → 기온</button>
       <button class="lab-tab" data-exp="shape" role="tab" aria-selected="false">④ 녹지 배치 형태 → 기온</button>
+      <button class="lab-tab" data-exp="measure" role="tab" aria-selected="false">⑤ 저감 대책별 효과</button>
     </div>
 
     <p class="lab-method" id="labMethod"></p>
@@ -1524,13 +1548,30 @@ function(t){t.__bidiEngine__=t.prototype.__bidiEngine__=function(t){var r,n,i,a,
   var N = SIZE * SIZE;
   var ITERS = 10;
 
-  var SOURCE = {
-    building: 5.5,
-    road: 7.0,
-    park: -3.5,
-    water: -5.5,
-    grass: -1.0
+  // One table describes every surface the grid can hold, so adding a material
+  // means adding a row here rather than touching a dozen switch statements.
+  //   base     기준(24C) 대비 지표 열원값
+  //   occupied 사람이 머무는 칸인가 (점수 계산에 포함되는지)
+  //   movable  AI 최적화가 녹지와 자리를 맞바꿔도 되는 칸인가
+  //   iso      3D 조감도에서 어떤 모양으로 그릴지
+  //   family   보정 시 어느 재질의 계수 배율을 따라갈지
+  var MATERIALS = {
+    building: { label: "건물",      base: 5.5,  occupied: true,  movable: true,  iso: "building" },
+    road:     { label: "도로",      base: 7.0,  occupied: true,  movable: true,  iso: "road" },
+    coolroof: { label: "쿨루프",    base: 2.5,  occupied: true,  movable: true,  iso: "building", family: "building" },
+    coolpave: { label: "차열포장",  base: 4.0,  occupied: true,  movable: true,  iso: "road",     family: "road" },
+    park:     { label: "공원·녹지", base: -3.5, occupied: false, movable: false, iso: "park" },
+    water:    { label: "물",        base: -5.5, occupied: false, movable: false, iso: "water" },
+    grass:    { label: "빈터",      base: -1.0, occupied: true,  movable: false, iso: "grass" }
   };
+  var MATERIAL_KEYS = Object.keys(MATERIALS);
+  var MATERIAL_LABEL = {};
+  var SOURCE = {};
+  MATERIAL_KEYS.forEach(function(k){
+    MATERIAL_LABEL[k] = MATERIALS[k].label;
+    SOURCE[k] = MATERIALS[k].base;
+  });
+  var MOVABLE_KEYS = MATERIAL_KEYS.filter(function(k){ return MATERIALS[k].movable; });
 
   var grid = new Array(N).fill("grass");
   var temps = new Float32Array(N);
@@ -1647,7 +1688,7 @@ function(t){t.__bidiEngine__=t.prototype.__bidiEngine__=function(t){var r,n,i,a,
   function occupiedStats(g, t) {
     var sum = 0, max = -Infinity, min = Infinity, c = 0;
     for (var i = 0; i < g.length; i++) {
-      if (g[i] === "park" || g[i] === "water") continue;
+      if (!MATERIALS[g[i]].occupied) continue;
       sum += t[i];
       if (t[i] > max) max = t[i];
       if (t[i] < min) min = t[i];
@@ -1791,7 +1832,8 @@ function(t){t.__bidiEngine__=t.prototype.__bidiEngine__=function(t){var r,n,i,a,
     return (Math.floor(i / SIZE) + 1) + "행 " + (i % SIZE + 1) + "열, " +
       MATERIAL_LABEL[grid[i]] + ", " + (24 + temps[i]).toFixed(1) + "도";
   }
-  var BRUSH_KEYS = ["building", "road", "park", "water", "grass"];
+  // number keys follow the order the brush buttons appear in
+  var BRUSH_KEYS = ["building", "road", "park", "water", "grass", "coolroof", "coolpave"];
   gridEl.addEventListener("keydown", function(e){
     var x = focusIdx % SIZE, y = Math.floor(focusIdx / SIZE);
     var moved = -1;
@@ -1809,7 +1851,7 @@ function(t){t.__bidiEngine__=t.prototype.__bidiEngine__=function(t){var r,n,i,a,
         e.preventDefault();
         return;
       default:
-        if (e.key >= "1" && e.key <= "5") {
+        if (e.key >= "1" && e.key <= String(BRUSH_KEYS.length)) {
           selectBrush(BRUSH_KEYS[+e.key - 1]);
           e.preventDefault();
         }
@@ -1921,9 +1963,13 @@ function(t){t.__bidiEngine__=t.prototype.__bidiEngine__=function(t){var r,n,i,a,
     var x = Math.sin(i * 12.9898) * 43758.5453;
     return x - Math.floor(x);
   }
+  // 3D shape is looked up from the materials table, so a treated surface
+  // (쿨루프 / 차열포장) keeps the massing of the thing it replaced and only its
+  // colour -- which comes from the temperature -- tells them apart.
+  function isoShapeOf(type) { return MATERIALS[type].iso; }
   function cellHeight(i, type) {
     var pr = pseudoRand(i);
-    switch (type) {
+    switch (isoShapeOf(type)) {
       case "building": return 1.8 + pr * 4.2;
       case "road": return 0.12;
       case "park": return 0.55 + pr * 0.35;
@@ -2064,8 +2110,7 @@ function(t){t.__bidiEngine__=t.prototype.__bidiEngine__=function(t){var r,n,i,a,
     if (shadowLenFactor > 0) {
       for (var s = 0; s < order.length; s++) {
         var so = order[s];
-        var stype = grid[so.i];
-        var sh = cellHeight(so.i, stype);
+        var sh = cellHeight(so.i, grid[so.i]);
         if (sh < 0.5) continue;
         var sBaseX = originX + (so.rx - so.ry) * hw;
         var sBaseY = originY + (so.rx + so.ry) * hh;
@@ -2083,13 +2128,14 @@ function(t){t.__bidiEngine__=t.prototype.__bidiEngine__=function(t){var r,n,i,a,
     for (var k = 0; k < order.length; k++) {
       var o = order[k];
       var type = grid[o.i];
+      var shape = isoShapeOf(type);
       var h = cellHeight(o.i, type);
       var baseX = originX + (o.rx - o.ry) * hw;
       var baseY = originY + (o.rx + o.ry) * hh;
       var topY = baseY - h * ISO_HEIGHT_SCALE;
 
       var rgb = tempToRgb(temps[o.i]);
-      if (type === "water") {
+      if (shape === "water") {
         // water picks up a hint of the sky color, so it shifts warm at
         // sunset and dark at night instead of staying a flat blue always
         var wt = 0.20;
@@ -2112,7 +2158,7 @@ function(t){t.__bidiEngine__=t.prototype.__bidiEngine__=function(t){var r,n,i,a,
       isoCtx.moveTo(Ep[0], Ep[1]); isoCtx.lineTo(Sp[0], Sp[1]); isoCtx.lineTo(Sg[0], Sg[1]); isoCtx.lineTo(Eg[0], Eg[1]); isoCtx.closePath();
       isoCtx.fillStyle = rightFill; isoCtx.fill();
 
-      if (type === "building" && h > 1.2) {
+      if (shape === "building" && h > 1.2) {
         drawWindows([Wp, Sp, Wg, Sg], o.i * 31 + 1, litProb);
         drawWindows([Sp, Ep, Sg, Eg], o.i * 31 + 97, litProb);
       }
@@ -2122,7 +2168,7 @@ function(t){t.__bidiEngine__=t.prototype.__bidiEngine__=function(t){var r,n,i,a,
       isoCtx.fillStyle = topFill; isoCtx.fill();
       isoCtx.strokeStyle = "rgba(0,0,0,.12)"; isoCtx.lineWidth = 1; isoCtx.stroke();
 
-      if (type === "building" && h > 1.6 && pseudoRand(o.i * 31 + 51) < 0.35) {
+      if (shape === "building" && h > 1.6 && pseudoRand(o.i * 31 + 51) < 0.35) {
         var rx = baseX + (pseudoRand(o.i * 31 + 53) - 0.5) * hw * 0.7;
         var ry = topY + (pseudoRand(o.i * 31 + 55) - 0.5) * hh * 0.5;
         var isTank = pseudoRand(o.i * 31 + 57) < 0.5;
@@ -2133,7 +2179,7 @@ function(t){t.__bidiEngine__=t.prototype.__bidiEngine__=function(t){var r,n,i,a,
         } else {
           isoCtx.fillRect(rx - 2.2, ry - 1.6, 4.4, 3.2);
         }
-      } else if (type === "grass") {
+      } else if (shape === "grass") {
         for (var gd = 0; gd < 5; gd++) {
           var gx = baseX + (pseudoRand(o.i * 19 + gd) - 0.5) * hw * 1.1;
           var gy = topY + (pseudoRand(o.i * 19 + gd + 50) - 0.5) * hh * 0.9;
@@ -2142,7 +2188,7 @@ function(t){t.__bidiEngine__=t.prototype.__bidiEngine__=function(t){var r,n,i,a,
         }
       }
 
-      if (type === "water") {
+      if (shape === "water") {
         isoCtx.strokeStyle = "rgba(255,255,255,0.35)";
         isoCtx.lineWidth = 0.8;
         for (var wl = -1; wl <= 1; wl++) {
@@ -2151,7 +2197,7 @@ function(t){t.__bidiEngine__=t.prototype.__bidiEngine__=function(t){var r,n,i,a,
           isoCtx.lineTo(Ep[0] - hw*0.25, Ep[1] + hh*(0.5+wl*0.28));
           isoCtx.stroke();
         }
-      } else if (type === "park") {
+      } else if (shape === "park") {
         var pr1 = pseudoRand(o.i * 5 + 2), pr2 = pseudoRand(o.i * 5 + 3);
         var c1x = baseX + (pr1 - 0.5) * hw * 0.8, c1y = topY - hh * 0.15 - pr1 * 2;
         var c2x = baseX + (pr2 - 0.5) * hw * 0.8, c2y = topY + hh * 0.05 - pr2 * 2;
@@ -2160,7 +2206,7 @@ function(t){t.__bidiEngine__=t.prototype.__bidiEngine__=function(t){var r,n,i,a,
         isoCtx.beginPath(); isoCtx.ellipse(c2x, c2y, hw*0.26, hh*0.46, 0, 0, Math.PI*2); isoCtx.fill();
         isoCtx.fillStyle = shadeRgb(rgb, 0.95);
         isoCtx.beginPath(); isoCtx.ellipse(c1x - hw*0.08, c1y - hh*0.12, hw*0.14, hh*0.22, 0, 0, Math.PI*2); isoCtx.fill();
-      } else if (type === "road") {
+      } else if (shape === "road") {
         drawRoadLife(o.i, baseX, topY, hw, hh, animPhase);
       }
     }
@@ -2573,20 +2619,19 @@ function(t){t.__bidiEngine__=t.prototype.__bidiEngine__=function(t){var r,n,i,a,
   // (coarse pass, then a finer pass centered on the best value) is used
   // instead of gradient descent, since diffusion + wind advection make the
   // error surface non-smooth; least-squares alone can't see that nonlinearity.
-  var BASE_SOURCE = { building: 5.5, road: 7.0, park: -3.5, water: -5.5, grass: -1.0 };
+  var BASE_SOURCE = {};
+  MATERIAL_KEYS.forEach(function(k){ BASE_SOURCE[k] = MATERIALS[k].base; });
   var lastOptimizeResult = null;
   var lastCalibResult = null;
   var CALIB_RANGES = {
     building: [0.4, 2.2], road: [0.4, 2.2],
     park: [0.3, 2.5], water: [0.3, 2.5]
   };
-  var coefLabelEl = {
-    building: document.getElementById("coefBuilding"),
-    road: document.getElementById("coefRoad"),
-    grass: document.getElementById("coefGrass"),
-    park: document.getElementById("coefPark"),
-    water: document.getElementById("coefWater")
-  };
+  var coefLabelEl = {};
+  MATERIAL_KEYS.forEach(function(k){
+    var el = document.getElementById("coef" + k.charAt(0).toUpperCase() + k.slice(1));
+    if (el) coefLabelEl[k] = el;
+  });
   function updateCoefTable() {
     Object.keys(coefLabelEl).forEach(function(ty){
       var v = SOURCE[ty];
@@ -2607,8 +2652,18 @@ function(t){t.__bidiEngine__=t.prototype.__bidiEngine__=function(t){var r,n,i,a,
     return out;
   }
 
+  // A treated surface (쿨루프 / 차열포장) is the same material with a different
+  // finish, so it follows its parent's calibrated multiplier rather than being
+  // fitted separately -- a student team is not going to have separate field
+  // measurements for a cool roof they have not built yet.
+  function applyMultipliers(mult) {
+    MATERIAL_KEYS.forEach(function(k){
+      var src = MATERIALS[k].family || k;
+      if (mult[src] != null) SOURCE[k] = BASE_SOURCE[k] * mult[src];
+    });
+  }
   function calibErrorFor(mult, measured, activeTypes) {
-    Object.keys(mult).forEach(function(ty){ SOURCE[ty] = BASE_SOURCE[ty] * mult[ty]; });
+    applyMultipliers(mult);
     var t = computeTemps(grid);
     var avgByType = perTypeAvgTemp(grid, t);
     var err = 0;
@@ -2625,7 +2680,7 @@ function(t){t.__bidiEngine__=t.prototype.__bidiEngine__=function(t){var r,n,i,a,
   // minimizes internally — keeping "how the fit is scored for reporting"
   // separate from "what the search optimizes" avoids conflating the two.
   function fitMetrics(mult, measured, activeTypes) {
-    Object.keys(mult).forEach(function(ty){ SOURCE[ty] = BASE_SOURCE[ty] * mult[ty]; });
+    applyMultipliers(mult);
     var t = computeTemps(grid);
     var avgByType = perTypeAvgTemp(grid, t);
     var n = activeTypes.length;
@@ -2721,7 +2776,6 @@ function(t){t.__bidiEngine__=t.prototype.__bidiEngine__=function(t){var r,n,i,a,
   updateCoefTable();
 
   // ---- research summary card ----
-  var MATERIAL_LABEL = { building: "건물", road: "도로", park: "공원·녹지", water: "물", grass: "빈터" };
   function wrapText(ctx, text, maxWidth) {
     var words = text.split(/\s+/);
     var lines = [];
@@ -2860,7 +2914,7 @@ function(t){t.__bidiEngine__=t.prototype.__bidiEngine__=function(t){var r,n,i,a,
 
     // coefficient table
     heading("시뮬레이션 열원 계수 (현재)");
-    ["building","road","park","water","grass"].forEach(function(ty){
+    MATERIAL_KEYS.forEach(function(ty){
       var v = SOURCE[ty];
       row(MATERIAL_LABEL[ty], (v >= 0 ? "+" : "−") + Math.abs(v).toFixed(2) + " ℃");
     });
@@ -3172,7 +3226,7 @@ function(t){t.__bidiEngine__=t.prototype.__bidiEngine__=function(t){var r,n,i,a,
     var rows = [];
     rows.push("# 쿨시티 그리드 · 격자 원자료");
     rows.push("# 조건," + controlSummary());
-    rows.push("# 열원계수(℃)," + ["building","road","park","water","grass"].map(function(t){
+    rows.push("# 열원계수(℃)," + MATERIAL_KEYS.map(function(t){
       return t + "=" + SOURCE[t].toFixed(2);
     }).join(" "));
     rows.push("# 기준기온(℃),24.00");
@@ -3302,7 +3356,7 @@ function(t){t.__bidiEngine__=t.prototype.__bidiEngine__=function(t){var r,n,i,a,
     var parkIdx = [], movableIdx = [];
     for (var i = 0; i < N; i++) {
       if (grid[i] === "park") parkIdx.push(i);
-      else if (grid[i] === "building" || grid[i] === "road") movableIdx.push(i);
+      else if (MATERIALS[grid[i]].movable) movableIdx.push(i);
     }
     if (parkIdx.length === 0 || movableIdx.length === 0) {
       chartStatus.textContent = "공원 또는 건물/도로 칸이 부족합니다";
@@ -3462,12 +3516,19 @@ function(t){t.__bidiEngine__=t.prototype.__bidiEngine__=function(t){var r,n,i,a,
   // these keeps "what the rest of the city is made of" constant while only the
   // green budget moves.
   function baseComposition(g) {
-    var counts = { building: 0, road: 0, grass: 0 }, total = 0;
+    var counts = {}, total = 0;
+    MATERIAL_KEYS.forEach(function(k){
+      if (k !== "park" && k !== "water") counts[k] = 0;
+    });
     for (var i = 0; i < g.length; i++) {
       if (counts[g[i]] !== undefined) { counts[g[i]]++; total++; }
     }
     if (total === 0) return { building: 0.5, road: 0.3, grass: 0.2 };
-    return { building: counts.building / total, road: counts.road / total, grass: counts.grass / total };
+    var out = {};
+    Object.keys(counts).forEach(function(k){
+      if (counts[k] > 0) out[k] = counts[k] / total;
+    });
+    return out;
   }
   function cityWithParkCount(g, parkCount, comp) {
     var out = new Array(g.length);
@@ -3480,11 +3541,16 @@ function(t){t.__bidiEngine__=t.prototype.__bidiEngine__=function(t){var r,n,i,a,
     var nPark = Math.max(0, Math.min(pool.length, parkCount));
     for (var p = 0; p < nPark; p++) out[pool[p]] = "park";
     var rest = pool.length - nPark;
-    var nb = Math.round(comp.building * rest);
-    var nr = Math.round(comp.road * rest);
+    // fill the remainder proportionally rather than by re-rolling per cell, so
+    // the surface mix is identical between repeats and only the green
+    // placement differs
+    var keys = Object.keys(comp);
+    var quota = keys.map(function(k){ return Math.round(comp[k] * rest); });
+    var assigned = 0, ki = 0;
     for (var q = nPark; q < pool.length; q++) {
-      var k = q - nPark;
-      out[pool[q]] = k < nb ? "building" : (k < nb + nr ? "road" : "grass");
+      while (ki < keys.length - 1 && assigned >= quota[ki]) { ki++; assigned = 0; }
+      out[pool[q]] = keys[ki];
+      assigned++;
     }
     return out;
   }
@@ -3601,7 +3667,7 @@ function(t){t.__bidiEngine__=t.prototype.__bidiEngine__=function(t){var r,n,i,a,
     var parkIdx = [], movableIdx = [];
     for (var i = 0; i < current.length; i++) {
       if (current[i] === "park") parkIdx.push(i);
-      else if (current[i] === "building" || current[i] === "road") movableIdx.push(i);
+      else if (MATERIALS[current[i]].movable) movableIdx.push(i);
     }
     if (!parkIdx.length || !movableIdx.length) return current;
     var currentAvg = occupiedStats(current, computeTemps(current)).avg;
@@ -3629,6 +3695,18 @@ function(t){t.__bidiEngine__=t.prototype.__bidiEngine__=function(t){var r,n,i,a,
   }
 
   // ---- experiment definitions ----
+  // Scoring over a FIXED cell set (not "whatever is occupied now") is what
+  // makes the mitigation comparison honest -- see the experiment's method note.
+  function avgOverIndices(t, idx) {
+    var sum = 0;
+    for (var i = 0; i < idx.length; i++) sum += t[idx[i]];
+    return idx.length ? sum / idx.length : 0;
+  }
+
+  var MEASURE_ORDER = ["none", "park", "coolroof", "coolpave", "water"];
+  var MEASURE_LABEL = {
+    none: "대책 없음", park: "녹지 조성", coolroof: "쿨루프", coolpave: "차열포장", water: "수변 조성"
+  };
   var SHAPE_ORDER = ["compact", "spread", "edge", "random", "ai"];
   var SHAPE_LABEL = {
     compact: "집중형", spread: "분산형", edge: "가장자리형", random: "무작위형", ai: "AI 최적화"
@@ -3723,6 +3801,68 @@ function(t){t.__bidiEngine__=t.prototype.__bidiEngine__=function(t){var r,n,i,a,
       }
     },
 
+    measure: {
+      title: "같은 면적을 투입했을 때 열섬 저감 대책별 효과",
+      xLabel: "저감 대책",
+      yLabel: "기존 시가지 평균기온 (℃)",
+      xHeader: "저감 대책",
+      mode: "bar",
+      usesReps: true,
+      method: "<b>조작변인</b> 어떤 대책에 면적을 쓸 것인가(녹지 조성·쿨루프·차열포장·수변 조성) · <b>종속변인</b> 기존 시가지 평균기온 · <b>통제변인</b> 손대는 칸 수(모든 대책에 똑같이 배정), 나머지 도시 배치, 시간대, 바람, 열원 계수. " +
+        "<b>주의</b> 평균은 <i>대책을 적용하기 전</i>의 시가지 칸에 대해서만 냅니다. 녹지·수변으로 바꾼 칸을 평균에서 빼버리면 '더운 칸을 지웠을 뿐'인데도 녹지가 유리해 보이기 때문에, 같은 지점들의 온도가 실제로 얼마나 내려갔는지를 비교합니다. 대상 칸은 무작위로 고르므로 반복 횟수만큼 다시 골라 평균±표준편차를 냅니다.",
+      steps: function(){ return MEASURE_ORDER.slice(); },
+      label: function(v){ return MEASURE_LABEL[v]; },
+      prepare: function(){
+        var occIdx = [], buildings = [], roads = [], nonPark = [], nonWater = [];
+        for (var i = 0; i < N; i++) {
+          var ty = grid[i];
+          if (MATERIALS[ty].occupied) occIdx.push(i);
+          if (ty === "building") buildings.push(i);
+          if (ty === "road") roads.push(i);
+          if (ty !== "park") nonPark.push(i);
+          if (ty !== "water") nonWater.push(i);
+        }
+        // every measure has to treat the SAME number of cells for the
+        // comparison to mean anything, so the budget is capped by the scarcest
+        // applicable surface (you cannot cool-roof more roofs than exist)
+        var budget = Math.min(buildings.length, roads.length, Math.floor(N * 0.20));
+        if (budget < 5) {
+          return { error: "이 실험은 건물과 도로 양쪽에 같은 면적을 투입해 비교합니다. 건물과 도로를 각각 최소 5칸 이상 칠한 뒤 다시 실행해 주세요(지금: 건물 " + buildings.length + "칸, 도로 " + roads.length + "칸)." };
+        }
+        return { occIdx: occIdx, budget: budget, pools: {
+          none: [], park: nonPark, coolroof: buildings, coolpave: roads, water: nonWater
+        } };
+      },
+      repsFor: function(v, reps){ return v === "none" ? 1 : reps; },
+      run: function(v, ctxObj){
+        var g = grid.slice();
+        if (v !== "none") {
+          var pool = shuffleInPlace(ctxObj.pools[v].slice());
+          for (var i = 0; i < ctxObj.budget && i < pool.length; i++) g[pool[i]] = v;
+        }
+        return 24 + avgOverIndices(computeTemps(g), ctxObj.occIdx);
+      },
+      conclude: function(res){
+        var byLabel = {};
+        res.points.forEach(function(p){ byLabel[p.label] = p; });
+        var basePt = byLabel[MEASURE_LABEL.none];
+        var treated = res.points.filter(function(p){ return p.label !== MEASURE_LABEL.none; });
+        treated.sort(function(a, b){ return a.mean - b.mean; });
+        var best = treated[0], worst = treated[treated.length - 1];
+        var pct = (res.budget / N * 100).toFixed(0);
+        var txt = "도시 면적의 <b>" + pct + "%(" + res.budget + "칸)</b>를 똑같이 투입했을 때, 기존 시가지 평균기온을 가장 많이 낮춘 대책은 <b>" +
+          best.label + "</b>입니다 (" + basePt.mean.toFixed(2) + "℃ → " + best.mean.toFixed(2) + "℃, <b>−" +
+          (basePt.mean - best.mean).toFixed(2) + "℃</b>).";
+        txt += " 같은 면적을 " + worst.label + "에 썼을 때는 −" + (basePt.mean - worst.mean).toFixed(2) +
+          "℃에 그쳐, 대책 선택만으로 <b>" + (worst.mean - best.mean).toFixed(2) + "℃</b>가 갈립니다.";
+        txt += " 순위: " + treated.map(function(p, i){
+          return (i + 1) + "위 " + p.label + "(−" + (basePt.mean - p.mean).toFixed(2) + "℃)";
+        }).join(" · ") + ".";
+        txt += " 다만 쿨루프는 지붕만, 차열포장은 도로만 바꿀 수 있어 실제로 확보 가능한 면적이 서로 다르므로, 이 순위는 '같은 면적일 때'의 비교라는 점을 보고서에 함께 밝혀 주세요.";
+        return txt;
+      }
+    },
+
     shape: {
       title: "같은 녹지 예산에서 배치 형태에 따른 거주역 평균기온",
       xLabel: "녹지 배치 형태",
@@ -3804,8 +3944,8 @@ function(t){t.__bidiEngine__=t.prototype.__bidiEngine__=function(t){var r,n,i,a,
   // every experiment the student has finished, keyed by id, so the PDF report
   // can carry all of them rather than only whichever tab was open last
   var labResults = {};
-  var LAB_ORDER = ["green", "hour", "wind", "shape"];
-  var LAB_NUMERAL = { green: "①", hour: "②", wind: "③", shape: "④" };
+  var LAB_ORDER = ["green", "hour", "wind", "shape", "measure"];
+  var LAB_NUMERAL = { green: "①", hour: "②", wind: "③", shape: "④", measure: "⑤" };
   var labRunning = false;
 
   var LAB_LIGHT_PALETTE = {
@@ -4017,7 +4157,7 @@ function(t){t.__bidiEngine__=t.prototype.__bidiEngine__=function(t){var r,n,i,a,
     rows.push("# 쿨시티 그리드 · 변인 통제 실험 결과");
     rows.push("# 실험," + res.title);
     rows.push("# 통제변인," + res.control);
-    rows.push("# 열원계수(℃)," + ["building","road","park","water","grass"].map(function(t){
+    rows.push("# 열원계수(℃)," + MATERIAL_KEYS.map(function(t){
       return t + "=" + SOURCE[t].toFixed(2);
     }).join(" "));
     rows.push("# 생성시각," + new Date().toLocaleString("ko-KR"));
@@ -4076,7 +4216,8 @@ function(t){t.__bidiEngine__=t.prototype.__bidiEngine__=function(t){var r,n,i,a,
           hasSd: hasSd,
           reps: reps,
           parkCount: prepared.parkCount,
-          conclusion: exp.conclude({ points: points, parkCount: prepared.parkCount })
+          budget: prepared.budget,
+          conclusion: exp.conclude({ points: points, parkCount: prepared.parkCount, budget: prepared.budget })
         }, null);
       }
     }
