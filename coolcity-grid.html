@@ -430,6 +430,29 @@
     color:var(--ink-dim);
     letter-spacing:.01em;
   }
+  .iso-key{
+    margin:8px 2px 0;
+    font-size:11px; line-height:1.6; color:var(--ink-mute);
+    display:flex; align-items:center; gap:5px; flex-wrap:wrap;
+  }
+  .iso-key b{ color:var(--ink-dim); }
+  /* the swatches echo the canvas markings: a filled panel, a lattice */
+  .key-mark{
+    display:inline-block; width:13px; height:13px; flex:0 0 auto;
+    border-radius:3px; border:1px solid var(--line-strong);
+  }
+  .key-roof{
+    background:
+      linear-gradient(rgba(255,255,255,.85), rgba(255,255,255,.85)) center/7px 7px no-repeat,
+      var(--mat-building);
+  }
+  .key-pave{
+    background:
+      repeating-linear-gradient(90deg, rgba(255,255,255,.7) 0 1px, transparent 1px 4px),
+      repeating-linear-gradient(0deg, rgba(255,255,255,.7) 0 1px, transparent 1px 4px),
+      var(--mat-road);
+  }
+
   .cell-grid{
     display:grid;
     gap:2px;
@@ -1055,6 +1078,7 @@
               <div class="iso-loading-text" id="isoLoadingText">모식도를 불러오는 중…</div>
             </div>
           </div>
+          <p class="iso-key"><span class="key-mark key-roof" aria-hidden="true"></span> 쿨루프(반사 지붕 패널) · <span class="key-mark key-pave" aria-hidden="true"></span> 차열포장(격자 무늬) — 칸 색은 두 경우 모두 <b>예상 기온</b>을 나타냅니다.</p>
         </div>
 
         <div class="legend">
@@ -2366,6 +2390,58 @@ function(t){t.__bidiEngine__=t.prototype.__bidiEngine__=function(t){var r,n,i,a,
     }
   }
 
+  // A tile's top face is a rhombus; (a, b) walks its two axes over [-0.5, 0.5],
+  // so markings can be described in tile space instead of screen pixels.
+  function tileXY(baseX, topY, hw, hh, a, b) {
+    return [baseX + (a + b) * hw, topY + (b - a) * hh];
+  }
+
+  // Treated surfaces have to be identifiable in the 3D view, but the top-face
+  // COLOUR is already spoken for -- it encodes temperature, which is the whole
+  // language of the map. So a treatment is drawn as a marking laid over that
+  // colour rather than as a different hue: a reflective panel on a cool roof, a
+  // lattice texture on heat-reflective paving. Both are white at low alpha, so
+  // they read on warm and cool tiles and under day and night lighting alike.
+  function drawCoolRoofPanel(baseX, topY, hw, hh) {
+    var k = 0.62;
+    var q = [
+      tileXY(baseX, topY, hw, hh,  0.5*k, -0.5*k),
+      tileXY(baseX, topY, hw, hh,  0.5*k,  0.5*k),
+      tileXY(baseX, topY, hw, hh, -0.5*k,  0.5*k),
+      tileXY(baseX, topY, hw, hh, -0.5*k, -0.5*k)
+    ];
+    isoCtx.beginPath();
+    isoCtx.moveTo(q[0][0], q[0][1]);
+    for (var i = 1; i < 4; i++) isoCtx.lineTo(q[i][0], q[i][1]);
+    isoCtx.closePath();
+    isoCtx.fillStyle = "rgba(255,255,255,0.52)";
+    isoCtx.fill();
+    isoCtx.strokeStyle = "rgba(255,255,255,0.85)";
+    isoCtx.lineWidth = 0.8;
+    isoCtx.stroke();
+    // a glint, so the panel reads as reflective rather than merely pale
+    var g = tileXY(baseX, topY, hw, hh, 0.12, -0.26);
+    isoCtx.beginPath();
+    isoCtx.ellipse(g[0], g[1], hw * 0.15, hh * 0.24, 0, 0, Math.PI * 2);
+    isoCtx.fillStyle = "rgba(255,255,255,0.92)";
+    isoCtx.fill();
+  }
+  function drawCoolPaveTexture(baseX, topY, hw, hh) {
+    // stronger than a first pass used: the tile's own edge stroke already reads
+    // as a faint lattice at this zoom, so the texture has to clear that
+    isoCtx.strokeStyle = "rgba(255,255,255,0.46)";
+    isoCtx.lineWidth = 0.9;
+    var at = [-0.26, 0, 0.26];
+    for (var k = 0; k < at.length; k++) {
+      var p1 = tileXY(baseX, topY, hw, hh, at[k], -0.42);
+      var p2 = tileXY(baseX, topY, hw, hh, at[k], 0.42);
+      isoCtx.beginPath(); isoCtx.moveTo(p1[0], p1[1]); isoCtx.lineTo(p2[0], p2[1]); isoCtx.stroke();
+      var q1 = tileXY(baseX, topY, hw, hh, -0.42, at[k]);
+      var q2 = tileXY(baseX, topY, hw, hh, 0.42, at[k]);
+      isoCtx.beginPath(); isoCtx.moveTo(q1[0], q1[1]); isoCtx.lineTo(q2[0], q2[1]); isoCtx.stroke();
+    }
+  }
+
   function drawIso() {
     if (!heatStops) refreshHeatStops();
     var isoW = SIZE * ISO_TILE_W + 40;
@@ -2495,7 +2571,11 @@ function(t){t.__bidiEngine__=t.prototype.__bidiEngine__=function(t){var r,n,i,a,
       isoCtx.fillStyle = topFill; isoCtx.fill();
       isoCtx.strokeStyle = "rgba(0,0,0,.12)"; isoCtx.lineWidth = 1; isoCtx.stroke();
 
-      if (shape === "building" && h > 1.6 && pseudoRand(o.i * 31 + 51) < 0.35) {
+      if (type === "coolroof") drawCoolRoofPanel(baseX, topY, hw, hh);
+      else if (type === "coolpave") drawCoolPaveTexture(baseX, topY, hw, hh);
+
+      // a painted roof has no room for tanks and ducts on top of the panel
+      if (type !== "coolroof" && shape === "building" && h > 1.6 && pseudoRand(o.i * 31 + 51) < 0.35) {
         var rx = baseX + (pseudoRand(o.i * 31 + 53) - 0.5) * hw * 0.7;
         var ry = topY + (pseudoRand(o.i * 31 + 55) - 0.5) * hh * 0.5;
         var isTank = pseudoRand(o.i * 31 + 57) < 0.5;
