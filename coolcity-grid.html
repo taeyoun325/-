@@ -683,6 +683,44 @@
     color:var(--ink-mute);
     padding-top:6px;
   }
+  .help-again{
+    background:none;
+    border:none;
+    padding:0;
+    margin-left:6px;
+    font-size:11.5px;
+    color:var(--accent-text);
+    text-decoration:underline;
+    cursor:pointer;
+  }
+
+  .onboarding{
+    position:relative;
+    background:var(--accent-soft);
+    border:1px solid var(--accent);
+    border-radius:12px;
+    padding:16px 44px 16px 18px;
+    margin-bottom:16px;
+    font-size:13px;
+    line-height:1.5;
+    color:var(--ink);
+  }
+  .onboarding strong{ display:block; margin-bottom:8px; font-size:14px; }
+  .onboarding ol{ margin:0; padding-left:20px; display:flex; flex-direction:column; gap:5px; }
+  .onboarding b{ color:var(--accent-text); }
+  .onboarding-close{
+    position:absolute;
+    top:10px; right:12px;
+    width:26px; height:26px;
+    border-radius:8px;
+    border:none;
+    background:transparent;
+    color:var(--ink-dim);
+    font-size:18px;
+    line-height:1;
+    cursor:pointer;
+  }
+  .onboarding-close:hover{ color:var(--ink); }
 </style>
 
 <div class="app">
@@ -695,6 +733,17 @@
     </div>
     <span class="subject-tag">2026 공동탐구 전국대회 · 주제6 열섬현상(자유)</span>
   </header>
+
+  <div class="onboarding" id="onboarding" style="display:none;">
+    <button class="onboarding-close" id="onboardingClose" aria-label="도움말 닫기">×</button>
+    <strong>처음이신가요? 이렇게 시작해보세요</strong>
+    <ol>
+      <li>브러시로 도시를 직접 칠하거나, <b>서울·부산·제주</b> 버튼으로 실제 통계 기반 도시를 만들어보세요</li>
+      <li><b>AI 최적화 실행</b>으로 녹지를 어디에 배치하면 열섬이 가장 줄어드는지 찾아보세요</li>
+      <li><b>3D 도시 생성</b>으로 입체 화면을 확인해보세요 (시간대·바람도 반영됩니다)</li>
+      <li>실측 온도가 있다면 <b>계수 보정</b>으로 정확도를 높이고, <b>탐구 요약 카드</b>로 결과보고서용 이미지를 만드세요</li>
+    </ol>
+  </div>
 
   <div class="board">
 
@@ -886,7 +935,7 @@
     </aside>
   </div>
 
-  <footer class="meta">건물·도로 비율은 고정, 공원 칸 수(예산) 고정 — AI는 배치만 최적화합니다.</footer>
+  <footer class="meta">건물·도로 비율은 고정, 공원 칸 수(예산) 고정 — AI는 배치만 최적화합니다. <button class="help-again" id="btnHelpAgain">도움말 다시 보기</button></footer>
 </div>
 
 <script>
@@ -2279,6 +2328,20 @@
       return true;
     } catch (e) { return false; }
   }
+
+  // ---- onboarding help ----
+  var ONBOARD_KEY = "coolcitygrid_onboard_seen_v1";
+  var onboardingEl = document.getElementById("onboarding");
+  function showOnboarding() { onboardingEl.style.display = "block"; }
+  function hideOnboarding() {
+    onboardingEl.style.display = "none";
+    try { localStorage.setItem(ONBOARD_KEY, "1"); } catch (e) {}
+  }
+  document.getElementById("onboardingClose").addEventListener("click", hideOnboarding);
+  document.getElementById("btnHelpAgain").addEventListener("click", showOnboarding);
+  var alreadySeenOnboarding = false;
+  try { alreadySeenOnboarding = !!localStorage.getItem(ONBOARD_KEY); } catch (e) {}
+  if (!alreadySeenOnboarding) showOnboarding();
 
   // ---- init ----
   refreshHeatStops();
