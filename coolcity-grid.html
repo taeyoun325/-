@@ -669,6 +669,14 @@
   .calib-result th:first-child, .calib-result td:first-child{ text-align:left; font-family:"Gothic A1",sans-serif; }
   .calib-result .err-line{ margin-top:8px; color:var(--good); font-weight:600; }
 
+  .summary-block{ margin-top:16px; }
+  .summary-hint{
+    margin:8px 0 0;
+    font-size:11px;
+    line-height:1.5;
+    color:var(--ink-mute);
+  }
+
   footer.meta{
     text-align:center;
     font-size:11.5px;
@@ -866,6 +874,15 @@
         <button class="btn btn-primary" id="btnCalibrate" style="width:100%; margin-top:10px;">보정 실행</button>
         <div id="calibResult" class="calib-result" style="display:none;"></div>
       </details>
+
+      <div class="summary-block">
+        <button class="btn" id="btnSummaryCard" style="width:100%;">📄 탐구 요약 카드 만들기</button>
+        <p class="summary-hint">지금까지의 도시 통계·보정 상태·최적화 결과를 결과보고서에 붙여넣기 좋은 이미지 한 장으로 정리합니다.</p>
+        <div class="compare-panel" id="summaryPanel" style="display:none;">
+          <img id="summaryImg" alt="탐구 요약 카드" width="100%">
+          <p class="compare-hint">이미지를 우클릭 → "이미지를 다른 이름으로 저장"하세요.</p>
+        </div>
+      </div>
     </aside>
   </div>
 
@@ -1774,6 +1791,8 @@
   // instead of gradient descent, since diffusion + wind advection make the
   // error surface non-smooth; least-squares alone can't see that nonlinearity.
   var BASE_SOURCE = { building: 5.5, road: 7.0, park: -3.5, water: -5.5, grass: -1.0 };
+  var lastOptimizeResult = null;
+  var lastCalibResult = null;
   var CALIB_RANGES = {
     building: [0.4, 2.2], road: [0.4, 2.2],
     park: [0.3, 2.5], water: [0.3, 2.5]
@@ -1879,12 +1898,156 @@
     resultEl.innerHTML =
       "<table><thead><tr><th>재질</th><th>보정 전 계수</th><th>보정 후 계수</th></tr></thead><tbody>" + rows + "</tbody></table>" +
       "<div class=\"err-line\">평균 오차 " + maeBefore.toFixed(2) + "℃ → " + maeAfter.toFixed(2) + "℃</div>" + skipNote;
+    lastCalibResult = { maeBefore: maeBefore, maeAfter: maeAfter, types: activeTypes.slice() };
 
     updateCoefTable();
     render();
   });
 
   updateCoefTable();
+
+  // ---- research summary card ----
+  var MATERIAL_LABEL = { building: "건물", road: "도로", park: "공원·녹지", water: "물", grass: "빈터" };
+  function wrapText(ctx, text, maxWidth) {
+    var words = text.split(/\s+/);
+    var lines = [];
+    var line = "";
+    words.forEach(function(w){
+      var test = line ? line + " " + w : w;
+      if (ctx.measureText(test).width > maxWidth && line) {
+        lines.push(line);
+        line = w;
+      } else {
+        line = test;
+      }
+    });
+    if (line) lines.push(line);
+    return lines;
+  }
+
+  document.getElementById("btnSummaryCard").addEventListener("click", function(){
+    var W = 600, pad = 26, contentW = W - pad * 2;
+    var out = document.createElement("canvas");
+    var ctx = out.getContext("2d");
+    // measure pass on a throwaway context at final size (font metrics don't
+    // depend on canvas height, so this is safe before H is known)
+    out.width = W; out.height = 2000;
+
+    var y = pad;
+    function heading(text) {
+      ctx.fillStyle = "#1a1d18";
+      ctx.font = "700 13px 'Gothic A1', sans-serif";
+      ctx.textAlign = "left";
+      ctx.fillText(text, pad, y);
+      y += 8;
+      ctx.strokeStyle = "#d9dcd0";
+      ctx.lineWidth = 1;
+      ctx.beginPath(); ctx.moveTo(pad, y); ctx.lineTo(W - pad, y); ctx.stroke();
+      y += 20;
+    }
+    function row(label, value, valueColor) {
+      ctx.font = "500 12.5px 'Gothic A1', sans-serif";
+      ctx.fillStyle = "#55594c";
+      ctx.textAlign = "left";
+      ctx.fillText(label, pad, y);
+      ctx.font = "600 12.5px 'IBM Plex Mono', monospace";
+      ctx.fillStyle = valueColor || "#1a1d18";
+      ctx.textAlign = "right";
+      ctx.fillText(value, W - pad, y);
+      y += 21;
+    }
+    function paragraph(text) {
+      ctx.font = "400 11.5px 'Gothic A1', sans-serif";
+      ctx.fillStyle = "#767a6c";
+      ctx.textAlign = "left";
+      wrapText(ctx, text, contentW).forEach(function(line){
+        ctx.fillText(line, pad, y);
+        y += 16;
+      });
+      y += 4;
+    }
+
+    // header
+    ctx.fillStyle = "#1a1d18";
+    ctx.font = "700 20px 'Gothic A1', sans-serif";
+    ctx.textAlign = "left";
+    ctx.fillText("쿨시티 그리드 · 탐구 요약", pad, y + 6);
+    y += 16;
+    ctx.font = "600 11px 'IBM Plex Mono', monospace";
+    ctx.fillStyle = "#8a8e7f";
+    var now = new Date();
+    ctx.fillText(now.getFullYear() + "." + (now.getMonth()+1) + "." + now.getDate() + " 생성 · 2026 공동탐구 전국대회 · 열섬현상(자유)", pad, y + 14);
+    y += 36;
+
+    // current city stats
+    heading("현재 도시 지표 (건물·도로·빈터 기준)");
+    row("평균기온", document.getElementById("statAvg").textContent.replace("℃","") + " ℃");
+    row("최고기온", document.getElementById("statMax").textContent.replace("℃","") + " ℃");
+    row("최저기온", document.getElementById("statMin").textContent.replace("℃","") + " ℃");
+    row("녹지 비율", document.getElementById("statGreen").textContent.replace("%","") + " %");
+    y += 8;
+
+    // city preset citation, if used
+    var cityInfoEl = document.getElementById("cityInfo");
+    if (cityInfoEl.style.display === "block") {
+      heading("도시 프리셋 (실제 통계 인용)");
+      paragraph(cityInfoEl.textContent.trim());
+      y += 4;
+    }
+
+    // calibration status
+    heading("열원 계수 보정");
+    var isCalibrated = Object.keys(BASE_SOURCE).some(function(k){ return Math.abs(SOURCE[k] - BASE_SOURCE[k]) > 0.01; });
+    if (lastCalibResult) {
+      row("평균 오차 (보정 전 → 후)", lastCalibResult.maeBefore.toFixed(2) + " → " + lastCalibResult.maeAfter.toFixed(2) + " ℃", "#0ca30c");
+      paragraph("실측 데이터로 보정된 재질: " + lastCalibResult.types.map(function(t){ return MATERIAL_LABEL[t]; }).join(", "));
+    } else if (isCalibrated) {
+      paragraph("이전에 보정한 계수가 적용되어 있습니다(저장된 작업에서 복원됨). 정확한 보정 오차 수치를 카드에 남기려면 실측 보정을 다시 실행해 주세요.");
+    } else {
+      paragraph("실측 온도로 보정하지 않은 기본 가정값을 사용 중입니다. 아래 계수는 문헌적 가정치이며, 실측 보정 시 신뢰도가 높아집니다.");
+    }
+    y += 4;
+
+    // AI optimization result
+    heading("AI 배치 최적화");
+    if (lastOptimizeResult) {
+      row("평균기온 (전 → 후)", lastOptimizeResult.before.toFixed(1) + " → " + lastOptimizeResult.after.toFixed(1) + " ℃",
+        lastOptimizeResult.improved > 0.02 ? "#0ca30c" : "#55594c");
+      if (lastOptimizeResult.improved > 0.02) {
+        row("개선폭", "−" + lastOptimizeResult.improved.toFixed(2) + " ℃");
+      }
+    } else {
+      paragraph("AI 최적화를 아직 실행하지 않았습니다.");
+    }
+    y += 4;
+
+    // coefficient table
+    heading("시뮬레이션 열원 계수 (현재)");
+    ["building","road","park","water","grass"].forEach(function(ty){
+      var v = SOURCE[ty];
+      row(MATERIAL_LABEL[ty], (v >= 0 ? "+" : "−") + Math.abs(v).toFixed(2) + " ℃");
+    });
+    y += 12;
+
+    ctx.strokeStyle = "#d9dcd0";
+    ctx.beginPath(); ctx.moveTo(pad, y); ctx.lineTo(W - pad, y); ctx.stroke();
+    y += 20;
+    ctx.font = "500 10.5px 'Gothic A1', sans-serif";
+    ctx.fillStyle = "#8a8e7f";
+    ctx.textAlign = "left";
+    ctx.fillText("쿨시티 그리드로 생성 · 격자 확산 모델 기반 상대적 추정치", pad, y);
+
+    var finalCanvas = document.createElement("canvas");
+    finalCanvas.width = W;
+    finalCanvas.height = Math.ceil(y + pad);
+    var fctx = finalCanvas.getContext("2d");
+    fctx.fillStyle = "#fcfcfa";
+    fctx.fillRect(0, 0, W, finalCanvas.height);
+    fctx.drawImage(out, 0, 0);
+
+    document.getElementById("summaryImg").src = finalCanvas.toDataURL("image/png");
+    document.getElementById("summaryPanel").style.display = "block";
+  });
 
   // ---- before/after comparison image ----
   // Published artifacts can't trigger a script-driven file download for the
@@ -2061,6 +2224,7 @@
 
       var afterSnapshot = snapshotGridCanvas(best, computeTemps(best));
       showComparisonImage(beforeSnapshot, afterSnapshot, 24 + beforeAvg, 24 + bestAvg);
+      lastOptimizeResult = { before: 24 + beforeAvg, after: 24 + bestAvg, improved: improved };
       optimizing = false;
       btnOptimize.disabled = false;
     }
