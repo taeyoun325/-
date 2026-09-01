@@ -733,6 +733,16 @@
   }
   .lab-reps input:disabled{ opacity:.4; }
   .lab-status{ font-size:11.5px; color:var(--ink-mute); font-family:"IBM Plex Mono",monospace; }
+  .lab-seed{ font-size:12px; color:var(--ink-dim); display:flex; align-items:center; gap:5px; }
+  .lab-seed input{
+    width:96px; padding:6px 8px; border:1px solid var(--line); border-radius:7px;
+    background:var(--panel-2); color:var(--ink);
+    font:600 12px "IBM Plex Mono",monospace;
+  }
+  .lab-seednote{
+    margin:-6px 0 14px; font-size:11px; line-height:1.7; color:var(--ink-mute);
+  }
+  .lab-seednote b{ color:var(--ink-dim); }
   .lab-body{ display:grid; grid-template-columns:minmax(0,1fr) 276px; gap:18px; align-items:start; }
   @media (max-width:860px){ .lab-body{ grid-template-columns:1fr; } }
   .lab-chart-wrap{
@@ -1310,9 +1320,14 @@
     <div class="lab-run">
       <label class="lab-reps">반복 <input type="number" id="labReps" min="1" max="30" step="1" value="6"> 회</label>
       <button class="btn btn-primary" id="btnRunExp">실험 실행 →</button>
-      <button class="btn" id="btnRunAllExp" title="다섯 실험을 차례로 모두 실행합니다. PDF 보고서에 실험 페이지가 모두 실립니다.">전체 실험 실행</button>
+      <button class="btn" id="btnRunAllExp" title="여섯 실험을 차례로 모두 실행합니다. PDF 보고서에 실험 페이지가 모두 실립니다.">전체 실험 실행</button>
+      <label class="lab-seed">시드
+        <input type="number" id="labSeed" min="0" max="99999999" step="1" value="20260902" aria-label="난수 시드">
+        <button class="citybtn" id="btnSeedRoll" type="button" title="무작위로 새 시드를 뽑습니다">새 시드</button>
+      </label>
       <span class="lab-status" id="labStatus" role="status" aria-live="polite">대기 중</span>
     </div>
+    <p class="lab-seednote">무작위 배치와 AI 탐색은 <b>시드</b>에서 나옵니다. <b>같은 시드 + 같은 도시 = 같은 결과</b>이므로, 보고서에 적은 수치를 나중에 그대로 재현할 수 있어요. 다른 경우를 보고 싶으면 <b>새 시드</b>로 바꾸고, 보고서에는 <b>어떤 시드로 얻은 값인지</b> 함께 적어 주세요. (시드는 실험·AI 최적화·AI 종합 설계에 적용되며, 도시를 새로 그리는 '무작위 도시 생성'에는 적용되지 않습니다.)</p>
 
     <div class="lab-body">
       <div class="lab-chart-wrap">
@@ -1751,6 +1766,23 @@ function(t){t.__bidiEngine__=t.prototype.__bidiEngine__=function(t){var r,n,i,a,
 <script>
 (function(){
   "use strict";
+
+  // ---- seeded randomness for reproducible experiments ----
+  // A report that cites "녹지 30%에서 27.46℃" is only checkable if re-running the
+  // experiment reproduces that number, and every interesting path here is
+  // stochastic: layout shuffles, annealing proposals, acceptance rolls. They all
+  // draw from one generator that is reset at the start of each run, so a seed
+  // plus a city is a complete description of a result.
+  // mulberry32 -- 32 bits of state, uniform enough for placement sampling, and
+  // short enough that a student can write the seed in a report.
+  var rngState = 1;
+  function rngSeed(s) { rngState = (s >>> 0) || 1; }
+  function rng() {
+    rngState = (rngState + 0x6D2B79F5) | 0;
+    var t = Math.imul(rngState ^ (rngState >>> 15), 1 | rngState);
+    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  }
 
   var SIZE = 18;
   var N = SIZE * SIZE;
@@ -2820,6 +2852,10 @@ function(t){t.__bidiEngine__=t.prototype.__bidiEngine__=function(t){var r,n,i,a,
         if (x % 6 === 0 || y % 6 === 0) {
           grid[i] = "road";
         } else {
+          // city AUTHORING stays on Math.random: generating a city is a creative
+          // act you repeat until you like the look, and the city you settle on is
+          // already reproducible for others through the share code and the A/B
+          // slots. Only ANALYSIS is seeded.
           var r = Math.random();
           if (r < 0.46) grid[i] = "building";
           else if (r < 0.68) grid[i] = "park";
@@ -2830,9 +2866,13 @@ function(t){t.__bidiEngine__=t.prototype.__bidiEngine__=function(t){var r,n,i,a,
     }
     render();
   }
+  // `.citybtn` is a shared button STYLE -- the ambient reset and the seed dice
+  // wear it too -- so anything that means "a city preset button" has to say so
+  // with [data-city]. Binding the preset handler to the bare class made those
+  // other buttons call generateCityPreset(undefined) and throw.
   function clearCityPresetUI() {
     document.getElementById("cityInfo").style.display = "none";
-    document.querySelectorAll(".citybtn").forEach(function(b){ b.setAttribute("aria-pressed", "false"); });
+    document.querySelectorAll(".citybtn[data-city]").forEach(function(b){ b.setAttribute("aria-pressed", "false"); });
   }
   document.getElementById("btnRandom").addEventListener("click", function(){ clearCityPresetUI(); randomCity(); commitGridChange(); });
   document.getElementById("btnClear").addEventListener("click", function(){
@@ -2880,7 +2920,7 @@ function(t){t.__bidiEngine__=t.prototype.__bidiEngine__=function(t){var r,n,i,a,
     var p = CITY_PRESETS[key];
     var comp = p.composition;
     for (var i = 0; i < N; i++) {
-      var r = Math.random();
+      var r = Math.random();  // authoring, not analysis -- see randomCity()
       if (r < p.greenRatio) grid[i] = "park";
       else if (r < p.greenRatio + comp.building) grid[i] = "building";
       else if (r < p.greenRatio + comp.building + comp.road) grid[i] = "road";
@@ -2896,12 +2936,12 @@ function(t){t.__bidiEngine__=t.prototype.__bidiEngine__=function(t){var r,n,i,a,
       ". 건물·도로·물 비율은 인구밀도를 참고해 이 도구가 추정한 값입니다(녹지율만 실측 통계)." +
       "<span class=\"src\">출처: " + p.source + "</span>";
 
-    document.querySelectorAll(".citybtn").forEach(function(b){
+    document.querySelectorAll(".citybtn[data-city]").forEach(function(b){
       b.setAttribute("aria-pressed", b.dataset.city === key ? "true" : "false");
     });
   }
 
-  document.querySelectorAll(".citybtn").forEach(function(btn){
+  document.querySelectorAll(".citybtn[data-city]").forEach(function(btn){
     btn.addEventListener("click", function(){ generateCityPreset(btn.dataset.city); commitGridChange(); });
   });
 
@@ -3299,6 +3339,7 @@ function(t){t.__bidiEngine__=t.prototype.__bidiEngine__=function(t){var r,n,i,a,
     row("녹지 비율", document.getElementById("statGreen").textContent.replace("%","") + " %");
     row("기준기온(배경)", AMBIENT.toFixed(1) + " ℃");
     row("측정 조건", formatHour(hourOfDay) + " · 바람 " + (windStrength === 0 ? "없음" : WIND_LABELS[windDir] + " " + Math.round(windStrength*100) + "%"));
+    row("난수 시드", labSeedEl.value);
     y += 8;
 
     // city preset citation, if used
@@ -3667,7 +3708,7 @@ function(t){t.__bidiEngine__=t.prototype.__bidiEngine__=function(t){var r,n,i,a,
       "습도·증발산의 시간 변화, 에어컨 실외기 같은 인공 배열, 지형과 해풍은 모두 빠져 있다.",
       "쿨루프·차열포장 계수는 문헌상 표면온도 저감 폭을 이 모델의 상대 눈금으로 옮긴 가정치이며, 인용 가능한 실측 계수가 아니다.",
       "바람은 한 방향·한 세기로 일정하다고 보았고, 건물에 부딪혀 갈라지는 실제 흐름은 계산하지 않는다.",
-      "AI 최적화는 담금질 기법(simulated annealing)이라 매번 같은 답을 주지 않는다. 여러 번 실행해 결과의 폭을 함께 보고하는 것이 정확하다."
+      "AI 최적화는 담금질 기법(simulated annealing)이라 시드에 따라 다른 답을 낸다. 같은 시드로는 그대로 재현되지만, 결론을 낼 때는 시드를 몇 개 바꿔 결과의 폭을 함께 보고하는 것이 정확하다."
     ].forEach(function(t){ bullet("·", t, "#8a8e7f"); });
 
     y += 6;
@@ -3956,6 +3997,7 @@ function(t){t.__bidiEngine__=t.prototype.__bidiEngine__=function(t){var r,n,i,a,
       return;
     }
 
+    var runSeed = useSeed();
     optimizing = true;
     btnOptimize.disabled = true;
     deltaLine.style.display = "none";
@@ -3982,8 +4024,8 @@ function(t){t.__bidiEngine__=t.prototype.__bidiEngine__=function(t){var r,n,i,a,
       // tick there -- nothing is being drawn for those steps anyway
       var budget = document.hidden ? 80 : stepsPerFrame;
       while (did < budget && step < totalSteps) {
-        var pPos = Math.floor(Math.random() * parkIdx.length);
-        var mPos = Math.floor(Math.random() * movableIdx.length);
+        var pPos = Math.floor(rng() * parkIdx.length);
+        var mPos = Math.floor(rng() * movableIdx.length);
         var pI = parkIdx[pPos], mI = movableIdx[mPos];
         var savedP = current[pI], savedM = current[mI];
         current[pI] = savedM;
@@ -3993,7 +4035,7 @@ function(t){t.__bidiEngine__=t.prototype.__bidiEngine__=function(t){var r,n,i,a,
         var avg = occupiedStats(current, t).avg;
         var delta = avg - currentAvg;
 
-        var accept = delta < 0 || Math.random() < Math.exp(-delta / T);
+        var accept = delta < 0 || rng() < Math.exp(-delta / T);
         if (accept) {
           currentAvg = avg;
           // keep the two index lists describing what the grid actually holds
@@ -4047,7 +4089,7 @@ function(t){t.__bidiEngine__=t.prototype.__bidiEngine__=function(t){var r,n,i,a,
       document.getElementById("deltaGood").textContent = improved > 0.02
         ? ("−" + improved.toFixed(2) + "℃ 개선")
         : "추가 개선 어려움 (이미 근접 최적)";
-      chartStatus.textContent = "완료";
+      chartStatus.textContent = "완료 · 시드 " + runSeed;
 
       var afterSnapshot = snapshotGridCanvas(best, computeTemps(best));
       showComparisonImage(beforeSnapshot, afterSnapshot, AMBIENT + beforeAvg, AMBIENT + bestAvg);
@@ -4069,7 +4111,7 @@ function(t){t.__bidiEngine__=t.prototype.__bidiEngine__=function(t){var r,n,i,a,
 
   function shuffleInPlace(arr) {
     for (var i = arr.length - 1; i > 0; i--) {
-      var j = Math.floor(Math.random() * (i + 1));
+      var j = Math.floor(rng() * (i + 1));
       var tmp = arr[i]; arr[i] = arr[j]; arr[j] = tmp;
     }
     return arr;
@@ -4235,8 +4277,8 @@ function(t){t.__bidiEngine__=t.prototype.__bidiEngine__=function(t){var r,n,i,a,
     if (!parkIdx.length || !movableIdx.length) return 0.02;
     var tmp = g.slice(), acc = 0;
     for (var s = 0; s < probes; s++) {
-      var pI = parkIdx[Math.floor(Math.random() * parkIdx.length)];
-      var mI = movableIdx[Math.floor(Math.random() * movableIdx.length)];
+      var pI = parkIdx[Math.floor(rng() * parkIdx.length)];
+      var mI = movableIdx[Math.floor(rng() * movableIdx.length)];
       var a = tmp[pI], b = tmp[mI];
       tmp[pI] = b; tmp[mI] = a;
       acc += Math.abs(occupiedStats(tmp, computeTemps(tmp)).avg - baseAvg);
@@ -4268,14 +4310,14 @@ function(t){t.__bidiEngine__=t.prototype.__bidiEngine__=function(t){var r,n,i,a,
     var sched = annealSchedule(estimateMoveScale(current, parkIdx, movableIdx, currentAvg, 12), steps);
     var T = sched.T0;
     for (var s = 0; s < steps; s++) {
-      var pPos = Math.floor(Math.random() * parkIdx.length);
-      var mPos = Math.floor(Math.random() * movableIdx.length);
+      var pPos = Math.floor(rng() * parkIdx.length);
+      var mPos = Math.floor(rng() * movableIdx.length);
       var pI = parkIdx[pPos], mI = movableIdx[mPos];
       var savedP = current[pI], savedM = current[mI];
       current[pI] = savedM; current[mI] = savedP;
       var avg = occupiedStats(current, computeTemps(current)).avg;
       var delta = avg - currentAvg;
-      if (delta < 0 || Math.random() < Math.exp(-delta / T)) {
+      if (delta < 0 || rng() < Math.exp(-delta / T)) {
         currentAvg = avg;
         parkIdx[pPos] = mI; movableIdx[mPos] = pI;
         if (avg < bestAvg) { bestAvg = avg; best = current.slice(); }
@@ -4421,7 +4463,7 @@ function(t){t.__bidiEngine__=t.prototype.__bidiEngine__=function(t){var r,n,i,a,
       xHeader: "예산(점)",
       mode: "line",
       usesReps: true,
-      method: "<b>조작변인</b> 투입 예산(0점→240점) · <b>종속변인</b> 기존 시가지 평균기온 · <b>통제변인</b> 도시 배치, 대책별 단가, 시간대, 바람, 열원 계수. 예산마다 <b>AI 종합 설계를 처음부터 다시 돌려</b> 그 예산에서 낼 수 있는 최선의 조합을 찾습니다. 담금질은 확률적 탐색이라 같은 예산이라도 결과가 조금씩 달라지므로, 반복 횟수만큼 다시 돌려 평균±표준편차를 냅니다(속도를 위해 화면 버튼보다 짧은 탐색을 씁니다).",
+      method: "<b>조작변인</b> 투입 예산(0점→240점) · <b>종속변인</b> 기존 시가지 평균기온 · <b>통제변인</b> 도시 배치, 대책별 단가, 시간대, 바람, 열원 계수. 예산마다 <b>AI 종합 설계를 처음부터 다시 돌려</b> 그 예산에서 낼 수 있는 최선의 조합을 찾습니다. 담금질은 담금질은 확률적 탐색이라 같은 예산이라도 매 반복이 서로 다른 조합에 도달하므로, 반복 횟수만큼 다시 돌려 평균±표준편차를 냅니다(속도를 위해 화면 버튼보다 짧은 탐색을 씁니다).",
       // the range has to run past the point where the cheap surface treatments
       // are exhausted, otherwise the curve is a straight line and the whole
       // point of the experiment (diminishing returns) never shows up
@@ -4628,6 +4670,24 @@ function(t){t.__bidiEngine__=t.prototype.__bidiEngine__=function(t){var r,n,i,a,
   var labCsvText = document.getElementById("labCsvText");
   var labExportPanel = document.getElementById("labExportPanel");
   var labExportImg = document.getElementById("labExportImg");
+  var labSeedEl = document.getElementById("labSeed");
+  // Reseeds the generator and returns the seed actually used, so the caller can
+  // print it next to the numbers it produced -- a result nobody can trace back
+  // to a seed is not reproducible even though the machinery is.
+  function useSeed() {
+    var v = parseInt(labSeedEl.value, 10);
+    if (!isFinite(v) || v < 0) v = 0;
+    v = Math.min(99999999, Math.floor(v));
+    labSeedEl.value = v;
+    rngSeed(v);
+    scheduleSave();
+    return v;
+  }
+  document.getElementById("btnSeedRoll").addEventListener("click", function(){
+    labSeedEl.value = Math.floor(Math.random() * 100000000);
+    useSeed();
+  });
+
   var currentExp = "green";
   var lastLabResult = null;
   // every experiment the student has finished, keyed by id, so the PDF report
@@ -4858,6 +4918,7 @@ function(t){t.__bidiEngine__=t.prototype.__bidiEngine__=function(t){var r,n,i,a,
   }
 
   function runExperimentAsync(key, reps, done) {
+    var seed = useSeed();
     var exp = LAB_EXPERIMENTS[key];
     var xs = exp.steps();
     var prepared = exp.prepare();
@@ -4900,7 +4961,8 @@ function(t){t.__bidiEngine__=t.prototype.__bidiEngine__=function(t){var r,n,i,a,
           xHeader: exp.xHeader,
           mode: exp.mode,
           method: exp.method,
-          control: controlSummary() + (exp.usesReps ? " · 반복 " + reps + "회" : " · n=1"),
+          control: controlSummary() + (exp.usesReps ? " · 반복 " + reps + "회" : " · n=1") + " · 시드 " + seed,
+          seed: seed,
           points: points,
           hasSd: hasSd,
           reps: reps,
@@ -5310,7 +5372,7 @@ function(t){t.__bidiEngine__=t.prototype.__bidiEngine__=function(t){var r,n,i,a,
     var c = TREATMENT_COST[baseType + ">" + kind];
     return c == null ? Infinity : c;
   }
-  function pick(arr) { return arr[Math.floor(Math.random() * arr.length)]; }
+  function pick(arr) { return arr[Math.floor(rng() * arr.length)]; }
 
   function planningSets(base) {
     var scoreIdx = [], eligible = [];
@@ -5338,7 +5400,7 @@ function(t){t.__bidiEngine__=t.prototype.__bidiEngine__=function(t){var r,n,i,a,
       // eligible is at most a few hundred cells, so rejection sampling finds an
       // unassigned one immediately unless the plan already covers nearly all
       for (var tries = 0; tries < 24; tries++) {
-        var c = eligible[Math.floor(Math.random() * eligible.length)];
+        var c = eligible[Math.floor(rng() * eligible.length)];
         if (assigned[c] === undefined) return c;
       }
       return -1;
@@ -5362,7 +5424,7 @@ function(t){t.__bidiEngine__=t.prototype.__bidiEngine__=function(t){var r,n,i,a,
     var probe = 0, probes = 0;
     var startCells = Object.keys(assigned);
     for (var s0 = 0; s0 < 10 && startCells.length; s0++) {
-      var pc = startCells[Math.floor(Math.random() * startCells.length)];
+      var pc = startCells[Math.floor(rng() * startCells.length)];
       var savedKind = assigned[pc];
       delete assigned[pc];
       probe += Math.abs(evaluate() - currentAvg);
@@ -5377,7 +5439,7 @@ function(t){t.__bidiEngine__=t.prototype.__bidiEngine__=function(t){var r,n,i,a,
     // Every move is proposed, costed, and only then evaluated; an over-budget
     // proposal is rolled back without paying for a diffusion solve.
     function proposeMove() {
-      var roll = Math.random();
+      var roll = rng();
       var cells = Object.keys(assigned);
       if (roll < 0.35 || !cells.length) {
         var addCell = randomFree();
@@ -5388,7 +5450,7 @@ function(t){t.__bidiEngine__=t.prototype.__bidiEngine__=function(t){var r,n,i,a,
         assigned[addCell] = addKind; spent += addCost;
         return function undo(){ delete assigned[addCell]; spent -= addCost; };
       }
-      var cell = +cells[Math.floor(Math.random() * cells.length)];
+      var cell = +cells[Math.floor(rng() * cells.length)];
       var oldKind = assigned[cell];
       var oldCost = costOf(base[cell], oldKind);
       if (roll < 0.5) { // remove
@@ -5433,7 +5495,7 @@ function(t){t.__bidiEngine__=t.prototype.__bidiEngine__=function(t){var r,n,i,a,
           if (!undo) { history.push(currentAvg); continue; }
           var avg = evaluate();
           var delta = avg - currentAvg;
-          if (delta < 0 || Math.random() < Math.exp(-delta / T)) {
+          if (delta < 0 || rng() < Math.exp(-delta / T)) {
             currentAvg = avg;
             if (avg < bestAvg) {
               bestAvg = avg;
@@ -5466,6 +5528,7 @@ function(t){t.__bidiEngine__=t.prototype.__bidiEngine__=function(t){var r,n,i,a,
     var budget = Math.max(1, Math.min(2000, parseInt(budgetEl.value, 10) || 60));
     budgetEl.value = budget;
 
+    var runSeed = useSeed();
     var btn = this;
     plannerRunning = true;
     btn.disabled = true;
@@ -5504,14 +5567,15 @@ function(t){t.__bidiEngine__=t.prototype.__bidiEngine__=function(t){var r,n,i,a,
 
       var bestAvg = planner.bestAvg;
       var improved = beforeAvg - bestAvg;
-      chartStatus.textContent = "완료";
+      chartStatus.textContent = "완료 · 시드 " + runSeed;
       resultEl.style.display = "block";
       resultEl.innerHTML =
         "<div class=\"plan-delta\">" + (AMBIENT + beforeAvg).toFixed(2) + "℃ → <b>" + (AMBIENT + bestAvg).toFixed(2) +
         "℃</b> <span class=\"good\">−" + improved.toFixed(2) + "℃</span></div>" +
         "<div class=\"plan-mix\">AI가 고른 조합 · 녹지 <b>" + counts.park + "</b>칸 · 쿨루프 <b>" + counts.coolroof +
-        "</b>칸 · 차열포장 <b>" + counts.coolpave + "</b>칸 · 사용 예산 <b>" + planner.bestSpent + "</b>/" + budget + "점</div>" +
-        "<p class=\"science-note\">기존 시가지 " + sets.scoreIdx.length + "칸의 평균기온 기준입니다. 예산별 저감량 곡선은 아래 <b>탐구 실험실 ⑥</b>에서 한 번에 그릴 수 있어요. 확률적 탐색이라 실행할 때마다 조합이 조금씩 달라집니다. 되돌리기로 이전 도시로 돌아갈 수 있습니다.</p>";
+        "</b>칸 · 차열포장 <b>" + counts.coolpave + "</b>칸 · 사용 예산 <b>" + planner.bestSpent + "</b>/" + budget +
+        "점 · 시드 <b>" + runSeed + "</b></div>" +
+        "<p class=\"science-note\">기존 시가지 " + sets.scoreIdx.length + "칸의 평균기온 기준입니다. 예산별 저감량 곡선은 아래 <b>탐구 실험실 ⑥</b>에서 한 번에 그릴 수 있어요. 같은 시드로 다시 실행하면 같은 조합이 나오고, 시드를 바꾸면 달라집니다. 되돌리기로 이전 도시로 돌아갈 수 있습니다.</p>";
 
       showComparisonImage(beforeSnapshot, snapshotGridCanvas(out, computeTemps(out)), AMBIENT + beforeAvg, AMBIENT + bestAvg);
       lastPlanResult = {
@@ -5550,6 +5614,7 @@ function(t){t.__bidiEngine__=t.prototype.__bidiEngine__=function(t){var r,n,i,a,
         windStrength: windStrength,
         source: SOURCE,
         ambient: AMBIENT,
+        seed: labSeedEl.value,
         scenarios: scenarios,
         isoRotation: isoRotation,
         labResults: labResults
@@ -5578,6 +5643,7 @@ function(t){t.__bidiEngine__=t.prototype.__bidiEngine__=function(t){var r,n,i,a,
         });
       }
       if (typeof state.ambient === "number") AMBIENT = state.ambient;
+      if (state.seed != null && isFinite(parseInt(state.seed, 10))) labSeedEl.value = parseInt(state.seed, 10);
       if (state.scenarios && typeof state.scenarios === "object") {
         SCENARIO_KEYS.forEach(function(k){
           var sc = state.scenarios[k];
