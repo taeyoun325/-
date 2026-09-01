@@ -852,6 +852,15 @@
   .slot-table tr.current td:first-child{ color:var(--ink-mute); font-style:italic; }
   .slot-table tr.best td{ color:var(--accent-text); font-weight:700; }
 
+  .share-row{ display:flex; gap:6px; align-items:center; margin-top:10px; }
+  .share-in{
+    flex:1; min-width:0;
+    padding:7px 9px; border:1px solid var(--line); border-radius:8px;
+    background:var(--panel-2); color:var(--ink);
+    font:500 11px "IBM Plex Mono",monospace;
+  }
+  #shareOut{ margin-top:8px; word-break:break-all; }
+
   .summary-block{ margin-top:16px; }
   .summary-hint{
     margin:8px 0 0;
@@ -1149,6 +1158,20 @@
         <p class="science-note" style="margin-top:8px;">지금 캔버스 상태를 슬롯에 저장해 두고 다른 설계안과 지표를 나란히 비교합니다. 예: <b>A</b> 우리 동네 현재 모습 · <b>B</b> 녹지 확대안 · <b>C</b> 쿨루프·차열포장 적용안.</p>
         <div class="slot-row" id="slotRow"></div>
         <div class="slot-compare" id="slotCompare"></div>
+      </details>
+
+      <details class="science" id="sharePanel">
+        <summary>설계 공유 코드 (다른 기기 · 팀원과 주고받기)</summary>
+        <p class="science-note" style="margin-top:8px;">저장된 작업은 이 브라우저에만 남습니다. 지금 설계를 <b>글자 한 줄</b>로 바꿔 팀원에게 보내면, 격자 배치는 물론 시간대·바람·기준기온·보정한 계수까지 그대로 재현됩니다.</p>
+        <div class="share-row">
+          <button class="btn" id="btnShareMake">코드 만들기</button>
+        </div>
+        <textarea id="shareOut" class="lab-csv" rows="3" readonly style="display:none;" aria-label="생성된 설계 공유 코드"></textarea>
+        <div class="share-row" style="margin-top:10px;">
+          <input type="text" id="shareIn" class="share-in" placeholder="받은 코드를 여기에 붙여넣기 (CCG-…)" aria-label="설계 공유 코드 붙여넣기">
+          <button class="btn" id="btnShareApply">불러오기</button>
+        </div>
+        <span class="save-status" id="shareStatus"></span>
       </details>
 
       <div class="summary-block">
@@ -4747,6 +4770,127 @@ function(t){t.__bidiEngine__=t.prototype.__bidiEngine__=function(t){var r,n,i,a,
   // keep the comparison honest when the conditions move under it
   document.getElementById("scenarioPanel").addEventListener("toggle", function(){
     if (this.open) renderSlotCompare();
+  });
+
+  // ---- 설계 공유 코드 ----
+  // localStorage never leaves one browser, which is a problem for a project
+  // called 공동탐구: teammates work on different machines. A share code packs
+  // the whole design -- layout, the conditions it was drawn under, and any
+  // calibrated coefficients -- into one line that survives being pasted into a
+  // chat message, so nobody has to email an HTML file around.
+  var SHARE_CHAR = { building: "b", road: "r", coolroof: "c", coolpave: "v", park: "p", water: "w", grass: "g" };
+  var SHARE_TYPE = {};
+  Object.keys(SHARE_CHAR).forEach(function(k){ SHARE_TYPE[SHARE_CHAR[k]] = k; });
+
+  // Run-length encoding: cities are drawn in blocks and stripes, so runs are
+  // long and this shortens the payload several-fold over one char per cell.
+  function rleEncode(g) {
+    var out = "", run = 1;
+    for (var i = 1; i <= g.length; i++) {
+      if (i < g.length && g[i] === g[i - 1]) { run++; continue; }
+      out += SHARE_CHAR[g[i - 1]] + run;
+      run = 1;
+    }
+    return out;
+  }
+  function rleDecode(str) {
+    var out = [];
+    var re = /([a-z])(\d+)/g, m;
+    var consumed = 0;
+    while ((m = re.exec(str))) {
+      if (m.index !== consumed) return null; // stray characters between runs
+      consumed = re.lastIndex;
+      var ty = SHARE_TYPE[m[1]];
+      if (!ty) return null;
+      var n = parseInt(m[2], 10);
+      if (!(n > 0) || out.length + n > 100000) return null;
+      for (var k = 0; k < n; k++) out.push(ty);
+    }
+    if (consumed !== str.length) return null;
+    return out;
+  }
+
+  function buildShareCode() {
+    var parts = [
+      "CCG1",
+      SIZE,
+      AMBIENT.toFixed(1),
+      hourOfDay,
+      windDir,
+      Math.round(windStrength * 100),
+      MATERIAL_KEYS.map(function(k){ return SOURCE[k].toFixed(2); }).join(":"),
+      rleEncode(grid)
+    ];
+    // the payload is ASCII by construction, so plain btoa is safe here
+    return "CCG-" + btoa(parts.join("|")).replace(/=+$/, "");
+  }
+
+  function applyShareCode(raw) {
+    var code = String(raw || "").trim().replace(/\s+/g, "");
+    if (code.indexOf("CCG-") !== 0) return { ok: false, why: "코드가 CCG- 로 시작하지 않습니다. 복사한 전체 코드를 붙여넣어 주세요." };
+    var text;
+    try {
+      text = atob(code.slice(4));
+    } catch (e) {
+      return { ok: false, why: "코드가 깨졌습니다. 줄바꿈이나 빠진 글자 없이 전체를 붙여넣었는지 확인해 주세요." };
+    }
+    var p = text.split("|");
+    if (p[0] !== "CCG1") return { ok: false, why: "이 버전에서 읽을 수 없는 코드입니다." };
+    if (+p[1] !== SIZE) return { ok: false, why: "격자 크기가 다른 코드입니다(" + p[1] + "×" + p[1] + ")." };
+    var cells = rleDecode(p[7] || "");
+    if (!cells || cells.length !== N) return { ok: false, why: "격자 자료가 손상되었습니다." };
+
+    var coefs = (p[6] || "").split(":");
+    if (coefs.length === MATERIAL_KEYS.length) {
+      MATERIAL_KEYS.forEach(function(k, i){
+        var v = parseFloat(coefs[i]);
+        if (isFinite(v)) SOURCE[k] = v;
+      });
+    }
+    var amb = parseFloat(p[2]);
+    if (isFinite(amb)) AMBIENT = Math.max(-10, Math.min(50, amb));
+    var hr = parseInt(p[3], 10);
+    if (hr >= 0 && hr <= 23) hourOfDay = hr;
+    if (WIND_VECTORS[p[4]]) windDir = p[4];
+    var ws = parseInt(p[5], 10);
+    if (isFinite(ws)) windStrength = Math.max(0, Math.min(100, ws)) / 100;
+
+    grid = cells;
+    clearCityPresetUI();
+    document.getElementById("hourSlider").value = hourOfDay;
+    document.getElementById("windDir").value = windDir;
+    document.getElementById("windStrength").value = Math.round(windStrength * 100);
+    ambientInput.value = AMBIENT;
+    updateEnvLabels();
+    updateCoefTable();
+    render();
+    commitGridChange();
+    return { ok: true };
+  }
+
+  var shareOutEl = document.getElementById("shareOut");
+  var shareStatusEl = document.getElementById("shareStatus");
+
+  document.getElementById("btnShareMake").addEventListener("click", function(){
+    var code = buildShareCode();
+    shareOutEl.value = code;
+    shareOutEl.style.display = "block";
+    setSaveStatus(shareStatusEl, "", code.length + "자 · 아래 코드를 복사해 팀원에게 보내세요");
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(code).then(function(){
+        setSaveStatus(shareStatusEl, "ok", "✓ 클립보드에 복사했습니다 (" + code.length + "자)");
+      }, function(){});
+    }
+  });
+
+  document.getElementById("btnShareApply").addEventListener("click", function(){
+    var res = applyShareCode(document.getElementById("shareIn").value);
+    if (res.ok) {
+      setSaveStatus(shareStatusEl, "ok", "✓ 설계를 불러왔습니다 — 되돌리기로 이전 상태로 돌아갈 수 있어요");
+      document.getElementById("shareIn").value = "";
+    } else {
+      setSaveStatus(shareStatusEl, "err", res.why);
+    }
   });
 
   // ---- theme change: recolor cells if user or OS toggles theme ----
