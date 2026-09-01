@@ -1003,7 +1003,7 @@
           <div class="coef-row"><span>공원·녹지(증발산)</span><span id="coefPark">기준 대비 −3.5℃</span></div>
           <div class="coef-row"><span>물(하천·수역)</span><span id="coefWater">기준 대비 −5.5℃</span></div>
         </div>
-        <p class="science-note">각 칸의 온도는 지표 재질별 열원값을 격자 확산(diffusion) 방식으로 10회 반복 계산해 이웃 칸과 열이 섞이는 효과를 근사한 값입니다. 모델에 들어간 가정은 네 가지입니다. <b>① 시간대</b>: 태양열 세기를 0.25배(야간)~1.2배(오후 1~2시 정점)로 스케일링합니다. <b>② 바람의 이류</b>: 상풍 쪽 이웃 칸에 가중치를 더 줘 하풍 방향으로 열이 더 강하게 퍼집니다. <b>③ 열린 경계</b>: 격자 바깥은 기준기온(24℃)의 주변 공기로 보고 가장자리 칸이 그 공기와 열을 주고받습니다 — 그래서 도심 안쪽이 가장 덥고 외곽으로 갈수록 식는 실제 열섬 단면이 나타납니다. <b>④ 환기 효과</b>: 바람이 셀수록 지표에서 공기로 열이 빠져나가는 속도가 빨라져 열섬 세기 자체가 최대 35%까지 줄어듭니다. 실제 실외 실측값이 아니라 배치 전략을 비교하기 위한 상대적 모델이며, 아래 보정 기능으로 실제 측정 데이터와 맞춰볼 수 있습니다.</p>
+        <p class="science-note">각 칸의 온도는 지표 재질별 열원값을 격자 확산(diffusion) 방식으로 10회 반복 계산해 이웃 칸과 열이 섞이는 효과를 근사한 값입니다. 모델에 들어간 가정은 네 가지입니다. <b>① 시간대</b>: 태양열 세기를 0.25배(야간)~1.2배(오후 1~2시 정점)로 스케일링합니다. <b>② 바람의 이류</b>: 상풍 쪽 이웃 칸에 가중치를 더 줘 하풍 방향으로 열이 더 강하게 퍼집니다. <b>③ 열린 경계</b>: 격자 바깥은 기준기온(24℃)의 주변 공기로 보고 가장자리 칸이 그 공기와 열을 주고받습니다. 이 모델의 열은 이웃으로 1~2칸까지만 눈에 띄게 퍼지므로, 경계 효과도 가장 바깥 한두 줄이 약 0.1~0.7℃ 낮아지는 정도로 나타납니다(같은 이유로 공원 한 칸의 냉각 효과도 바로 옆 1~2칸까지입니다). <b>④ 환기 효과</b>: 바람이 셀수록 지표에서 공기로 열이 빠져나가는 속도가 빨라져 열섬 세기 자체가 최대 35%까지 줄어듭니다. 실제 실외 실측값이 아니라 배치 전략을 비교하기 위한 상대적 모델이며, 아래 보정 기능으로 실제 측정 데이터와 맞춰볼 수 있습니다.</p>
       </details>
 
       <details class="science" id="calibPanel">
@@ -1031,8 +1031,16 @@
           <p class="compare-hint">저장 버튼이 안 되면 이미지를 우클릭 → "이미지를 다른 이름으로 저장"하세요.</p>
         </div>
 
+        <button class="btn" id="btnGridCsv" style="width:100%; margin-top:10px;">🧾 격자 원자료 CSV 내보내기</button>
+        <p class="summary-hint">324개 칸의 재질과 예상 온도를 표로 저장합니다. 엑셀에서 직접 평균·표준편차를 내거나 그래프를 그릴 때 쓰세요.</p>
+        <div class="save-row"><span class="save-status" id="saveGridCsvStatus"></span></div>
+        <div id="csvFallback" style="display:none;">
+          <textarea id="csvFallbackText" class="lab-csv" readonly rows="7" aria-label="격자 원자료 CSV"></textarea>
+          <p class="compare-hint">자동 저장이 안 돼서 원자료를 여기에 펼쳤습니다. 전체 선택 후 복사해 엑셀에 붙여넣으세요.</p>
+        </div>
+
         <button class="btn btn-primary" id="btnPdfReport" style="width:100%; margin-top:10px;">📑 PDF 탐구 보고서 생성</button>
-        <p class="summary-hint">표지·도시 요약·3D 조감도를 담은 여러 페이지짜리 PDF를 만듭니다(jsPDF 사용).</p>
+        <p class="summary-hint">표지·도시 요약·3D 조감도에 더해, 실행해 둔 <b>변인 통제 실험마다 한 페이지씩</b>(그래프·실험 방법·결과 해석·측정 자료) 붙여 PDF로 만듭니다.</p>
         <div id="pdfPanel" style="display:none;">
           <div class="save-row">
             <button class="btn save-btn" id="btnSavePdf">💾 PDF 저장</button>
@@ -2704,6 +2712,26 @@ function(t){t.__bidiEngine__=t.prototype.__bidiEngine__=function(t){var r,n,i,a,
     }
     y += 4;
 
+    // completed controlled-variable experiments
+    heading("변인 통제 실험");
+    var doneKeys = LAB_ORDER.filter(function(k){ return !!labResults[k]; });
+    if (doneKeys.length) {
+      doneKeys.forEach(function(k){
+        var r = labResults[k];
+        var best = r.points[0], worst = r.points[0];
+        r.points.forEach(function(pt){
+          if (pt.mean < best.mean) best = pt;
+          if (pt.mean > worst.mean) worst = pt;
+        });
+        row(LAB_NUMERAL[k] + " " + r.xHeader + " 실험",
+          worst.mean.toFixed(2) + " → " + best.mean.toFixed(2) + " ℃ (Δ" + (worst.mean - best.mean).toFixed(2) + ")");
+      });
+      paragraph("각 실험의 그래프·해석·측정 자료는 PDF 탐구 보고서에 실험당 한 페이지씩 실립니다.");
+    } else {
+      paragraph("아직 실행한 변인 통제 실험이 없습니다. 아래 '탐구 실험실'에서 녹지 비율·시간대·바람·배치 형태 실험을 돌리면 결과가 여기에 정리됩니다.");
+    }
+    y += 4;
+
     // coefficient table
     heading("시뮬레이션 열원 계수 (현재)");
     ["building","road","park","water","grass"].forEach(function(ty){
@@ -2789,6 +2817,113 @@ function(t){t.__bidiEngine__=t.prototype.__bidiEngine__=function(t){var r,n,i,a,
     return c;
   }
 
+  // One report page per completed experiment: the same chart the student saw,
+  // plus the method, the auto-written interpretation, and the raw numbers, so
+  // the page stands on its own when it is pasted into a 결과보고서.
+  function renderExperimentPageCanvas(res, numeral) {
+    var W = 600, pad = 34, contentW = W - pad * 2;
+    var scratch = document.createElement("canvas");
+    scratch.width = W; scratch.height = 1600;
+    var ctx = scratch.getContext("2d");
+    var y = pad + 6;
+
+    ctx.textAlign = "left";
+    ctx.textBaseline = "alphabetic";
+    ctx.fillStyle = "#1a1d18";
+    ctx.font = "700 17px 'Gothic A1', sans-serif";
+    ctx.fillText("실험 " + numeral + " · " + res.title, pad, y + 10);
+    y += 26;
+    ctx.font = "500 10.5px 'IBM Plex Mono', monospace";
+    ctx.fillStyle = "#8a8e7f";
+    ctx.fillText("통제 조건: " + res.control, pad, y + 10);
+    y += 24;
+
+    function para(text, font, color, lh) {
+      ctx.font = font;
+      ctx.fillStyle = color;
+      wrapText(ctx, text, contentW).forEach(function(line){
+        ctx.fillText(line, pad, y + 10);
+        y += lh;
+      });
+    }
+
+    ctx.strokeStyle = "#d9dcd0"; ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(pad, y); ctx.lineTo(W - pad, y); ctx.stroke();
+    y += 16;
+
+    ctx.fillStyle = "#1a1d18";
+    ctx.font = "700 12px 'Gothic A1', sans-serif";
+    ctx.fillText("실험 방법", pad, y + 10);
+    y += 20;
+    para(stripTags(res.method || ""), "400 11px 'Gothic A1', sans-serif", "#767a6c", 16);
+    y += 14;
+
+    var chart = labChartToCanvas(res, 2, { noTitle: true });
+    var chartH = Math.round(contentW * (chart.height / chart.width));
+    ctx.strokeStyle = "#e2e5da";
+    ctx.strokeRect(pad - 0.5, y - 0.5, contentW + 1, chartH + 1);
+    ctx.drawImage(chart, pad, y, contentW, chartH);
+    y += chartH + 20;
+
+    ctx.fillStyle = "#1a1d18";
+    ctx.font = "700 12px 'Gothic A1', sans-serif";
+    ctx.fillText("결과 해석", pad, y + 10);
+    y += 20;
+    para(stripTags(res.conclusion), "400 11.5px 'Gothic A1', sans-serif", "#55594c", 17);
+    y += 16;
+
+    ctx.fillStyle = "#1a1d18";
+    ctx.font = "700 12px 'Gothic A1', sans-serif";
+    ctx.fillText("측정 자료", pad, y + 10);
+    y += 20;
+
+    var cols = res.hasSd
+      ? [res.xHeader, "평균기온(℃)", "표준편차(℃)", "n"]
+      : [res.xHeader, "평균기온(℃)"];
+    var tableW = Math.min(contentW, 150 + cols.length * 108);
+    var colW = tableW / cols.length;
+    ctx.font = "600 10.5px 'Gothic A1', sans-serif";
+    ctx.fillStyle = "#8a8e7f";
+    cols.forEach(function(c, i){
+      ctx.textAlign = i === 0 ? "left" : "right";
+      ctx.fillText(c, i === 0 ? pad : pad + (i + 1) * colW - 6, y + 8);
+    });
+    y += 12;
+    ctx.strokeStyle = "#d9dcd0";
+    ctx.beginPath(); ctx.moveTo(pad, y); ctx.lineTo(pad + tableW, y); ctx.stroke();
+    y += 6;
+
+    res.points.forEach(function(p){
+      var cells = res.hasSd
+        ? [p.label, p.mean.toFixed(2), p.n > 1 ? p.sd.toFixed(2) : "–", String(p.n)]
+        : [p.label, p.mean.toFixed(2)];
+      cells.forEach(function(c, i){
+        ctx.textAlign = i === 0 ? "left" : "right";
+        ctx.font = i === 0 ? "500 10.5px 'Gothic A1', sans-serif" : "500 10.5px 'IBM Plex Mono', monospace";
+        ctx.fillStyle = i === 0 ? "#1a1d18" : "#55594c";
+        ctx.fillText(c, i === 0 ? pad : pad + (i + 1) * colW - 6, y + 9);
+      });
+      y += 15;
+      ctx.strokeStyle = "#eceee6";
+      ctx.beginPath(); ctx.moveTo(pad, y); ctx.lineTo(pad + tableW, y); ctx.stroke();
+    });
+    ctx.textAlign = "left";
+    y += 14;
+    ctx.font = "400 10px 'Gothic A1', sans-serif";
+    ctx.fillStyle = "#8a8e7f";
+    ctx.fillText("쿨시티 그리드 격자 확산 모델의 상대적 추정치 — 실외 실측값이 아닙니다.", pad, y + 8);
+    y += 16;
+
+    var out = document.createElement("canvas");
+    out.width = W;
+    out.height = Math.ceil(y + pad);
+    var octx = out.getContext("2d");
+    octx.fillStyle = "#fcfcfa";
+    octx.fillRect(0, 0, W, out.height);
+    octx.drawImage(scratch, 0, 0);
+    return out;
+  }
+
   function buildReportPDF() {
     var jsPDFCtor = window.jspdf.jsPDF;
     var cover = renderCoverPageCanvas();
@@ -2823,6 +2958,14 @@ function(t){t.__bidiEngine__=t.prototype.__bidiEngine__=function(t){var r,n,i,a,
 
     doc.addPage([isoPage.width, isoPage.height]);
     doc.addImage(isoPage.toDataURL("image/png"), "PNG", 0, 0, isoPage.width, isoPage.height);
+
+    LAB_ORDER.forEach(function(key){
+      var res = labResults[key];
+      if (!res) return;
+      var page = renderExperimentPageCanvas(res, LAB_NUMERAL[key]);
+      doc.addPage([page.width, page.height]);
+      doc.addImage(page.toDataURL("image/png"), "PNG", 0, 0, page.width, page.height);
+    });
 
     return doc;
   }
@@ -2893,6 +3036,51 @@ function(t){t.__bidiEngine__=t.prototype.__bidiEngine__=function(t){var r,n,i,a,
   });
   wireSaveButton("btnSavePdf", "savePdfStatus", "쿨시티그리드_탐구보고서.pdf", function(){
     return Promise.resolve(lastPdfBlob);
+  });
+
+  // ---- raw grid data export ----
+  // Long format (one row per cell) rather than an 18x18 matrix: it is what a
+  // pivot table or a plotting tool actually wants, and it keeps the material
+  // label next to the temperature it produced.
+  function buildGridCsv() {
+    var rows = [];
+    rows.push("# 쿨시티 그리드 · 격자 원자료");
+    rows.push("# 조건," + controlSummary());
+    rows.push("# 열원계수(℃)," + ["building","road","park","water","grass"].map(function(t){
+      return t + "=" + SOURCE[t].toFixed(2);
+    }).join(" "));
+    rows.push("# 기준기온(℃),24.00");
+    rows.push("# 생성시각," + new Date().toLocaleString("ko-KR"));
+    rows.push(["행(y)", "열(x)", "재질", "예상기온(℃)", "기준대비(℃)"].join(","));
+    for (var i = 0; i < N; i++) {
+      rows.push([
+        Math.floor(i / SIZE) + 1,
+        (i % SIZE) + 1,
+        MATERIAL_LABEL[grid[i]],
+        (24 + temps[i]).toFixed(2),
+        temps[i].toFixed(2)
+      ].join(","));
+    }
+    return rows.join("\r\n");
+  }
+
+  document.getElementById("btnGridCsv").addEventListener("click", async function(){
+    var statusEl = document.getElementById("saveGridCsvStatus");
+    var fallback = document.getElementById("csvFallback");
+    setSaveStatus(statusEl, "", "저장 중…");
+    var csv = buildGridCsv();
+    var blob = new Blob(["\ufeff" + csv], { type: "text/csv;charset=utf-8" });
+    var result = await tryDownloadsSave("쿨시티그리드_격자원자료.csv", blob);
+    if (result.ok) {
+      fallback.style.display = "none";
+      setSaveStatus(statusEl, "ok", "✓ 저장 요청을 보냈습니다");
+    } else if (result.reason === "declined") {
+      setSaveStatus(statusEl, "", "저장을 취소했습니다");
+    } else {
+      document.getElementById("csvFallbackText").value = csv;
+      fallback.style.display = "block";
+      setSaveStatus(statusEl, "", "자동 저장 불가 — 아래 원자료를 복사해 주세요");
+    }
   });
 
   // ---- before/after comparison image ----
@@ -3486,6 +3674,11 @@ function(t){t.__bidiEngine__=t.prototype.__bidiEngine__=function(t){var r,n,i,a,
   var labExportImg = document.getElementById("labExportImg");
   var currentExp = "green";
   var lastLabResult = null;
+  // every experiment the student has finished, keyed by id, so the PDF report
+  // can carry all of them rather than only whichever tab was open last
+  var labResults = {};
+  var LAB_ORDER = ["green", "hour", "wind", "shape"];
+  var LAB_NUMERAL = { green: "①", hour: "②", wind: "③", shape: "④" };
   var labRunning = false;
 
   var LAB_LIGHT_PALETTE = {
@@ -3503,23 +3696,26 @@ function(t){t.__bidiEngine__=t.prototype.__bidiEngine__=function(t){var r,n,i,a,
 
   var LAB_CHART_W = 660, LAB_CHART_H = 340;
 
-  function drawExpChart(ctx, W, H, res, pal) {
+  function drawExpChart(ctx, W, H, res, pal, opts) {
+    var headless = !!(opts && opts.noTitle);
     ctx.save();
     ctx.fillStyle = pal.bg;
     ctx.fillRect(0, 0, W, H);
 
-    var L = 62, R = 18, T = 46, B = res.mode === "bar" ? 58 : 52;
+    var L = 62, R = 18, T = headless ? 20 : 46, B = res.mode === "bar" ? 58 : 52;
     var plotW = W - L - R, plotH = H - T - B;
     var n = res.points.length;
 
     ctx.textBaseline = "alphabetic";
     ctx.textAlign = "left";
-    ctx.fillStyle = pal.ink;
-    ctx.font = "700 14px 'Gothic A1', sans-serif";
-    ctx.fillText(res.title, 14, 22);
-    ctx.font = "500 10px 'IBM Plex Mono', monospace";
-    ctx.fillStyle = pal.mute;
-    ctx.fillText("통제: " + res.control, 14, 37);
+    if (!headless) {
+      ctx.fillStyle = pal.ink;
+      ctx.font = "700 14px 'Gothic A1', sans-serif";
+      ctx.fillText(res.title, 14, 22);
+      ctx.font = "500 10px 'IBM Plex Mono', monospace";
+      ctx.fillStyle = pal.mute;
+      ctx.fillText("통제: " + res.control, 14, 37);
+    }
 
     var lo = Infinity, hi = -Infinity;
     res.points.forEach(function(p){
@@ -3658,15 +3854,20 @@ function(t){t.__bidiEngine__=t.prototype.__bidiEngine__=function(t){var r,n,i,a,
   }
   // Export renders the same chart at 2x on a fixed LIGHT palette: report pages
   // are printed on white, so a dark-theme screenshot would be unusable there.
-  function labChartToCanvas() {
-    var scale = 2;
+  function labChartToCanvas(res, scale, opts) {
+    res = res || lastLabResult;
+    scale = scale || 2;
+    var H = (opts && opts.noTitle) ? LAB_CHART_H - 26 : LAB_CHART_H;
     var c = document.createElement("canvas");
     c.width = LAB_CHART_W * scale;
-    c.height = LAB_CHART_H * scale;
+    c.height = H * scale;
     var ctx = c.getContext("2d");
     ctx.scale(scale, scale);
-    drawExpChart(ctx, LAB_CHART_W, LAB_CHART_H, lastLabResult, LAB_LIGHT_PALETTE);
+    drawExpChart(ctx, LAB_CHART_W, H, res, LAB_LIGHT_PALETTE, opts);
     return c;
+  }
+  function stripTags(html) {
+    return String(html).replace(/<[^>]*>/g, "");
   }
 
   function renderLabTable(res) {
@@ -3742,6 +3943,7 @@ function(t){t.__bidiEngine__=t.prototype.__bidiEngine__=function(t){var r,n,i,a,
           yLabel: exp.yLabel,
           xHeader: exp.xHeader,
           mode: exp.mode,
+          method: exp.method,
           control: controlSummary() + (exp.usesReps ? " · 반복 " + reps + "회" : " · n=1"),
           points: points,
           hasSd: hasSd,
@@ -3790,6 +3992,8 @@ function(t){t.__bidiEngine__=t.prototype.__bidiEngine__=function(t){var r,n,i,a,
         return;
       }
       lastLabResult = res;
+      labResults[res.key] = res;
+      scheduleSave();
       labEmptyEl.style.display = "none";
       labChartCanvas.style.display = "block";
       renderLabChart();
@@ -3807,7 +4011,7 @@ function(t){t.__bidiEngine__=t.prototype.__bidiEngine__=function(t){var r,n,i,a,
     if (!lastLabResult) return;
     setSaveStatus(labSaveStatusEl, "", "저장 중…");
     // UTF-8 BOM so Excel opens the Korean headers correctly
-    var blob = new Blob(["﻿" + buildLabCsv(lastLabResult)], { type: "text/csv;charset=utf-8" });
+    var blob = new Blob(["\ufeff" + buildLabCsv(lastLabResult)], { type: "text/csv;charset=utf-8" });
     var result = await tryDownloadsSave("쿨시티그리드_실험_" + lastLabResult.key + ".csv", blob);
     if (result.ok) setSaveStatus(labSaveStatusEl, "ok", "✓ 저장 요청을 보냈습니다");
     else if (result.reason === "declined") setSaveStatus(labSaveStatusEl, "", "저장을 취소했습니다");
@@ -3868,7 +4072,8 @@ function(t){t.__bidiEngine__=t.prototype.__bidiEngine__=function(t){var r,n,i,a,
         windDir: windDir,
         windStrength: windStrength,
         source: SOURCE,
-        isoRotation: isoRotation
+        isoRotation: isoRotation,
+        labResults: labResults
       }));
     } catch (e) {}
   }
@@ -3888,6 +4093,15 @@ function(t){t.__bidiEngine__=t.prototype.__bidiEngine__=function(t){var r,n,i,a,
         });
       }
       if (typeof state.isoRotation === "number") isoRotation = state.isoRotation;
+      // restored experiments keep the control conditions they were run under
+      // printed alongside them, so a stale result is visible as stale rather
+      // than silently attributed to whatever city is on screen now
+      if (state.labResults && typeof state.labResults === "object") {
+        Object.keys(state.labResults).forEach(function(k){
+          var r = state.labResults[k];
+          if (r && Array.isArray(r.points) && r.points.length) labResults[k] = r;
+        });
+      }
       return true;
     } catch (e) { return false; }
   }
