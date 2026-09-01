@@ -782,6 +782,29 @@
     font-size:12px;
     line-height:1.6;
   }
+  .calib-holdout{
+    margin-top:12px; padding-top:10px;
+    border-top:1px dashed var(--line-strong);
+  }
+  .calib-holdout label{
+    display:flex; flex-direction:column; gap:5px;
+    font-size:11px; color:var(--ink-mute);
+  }
+  .calib-holdout input{
+    padding:7px 9px; border:1px solid var(--line); border-radius:8px;
+    background:var(--panel-2); color:var(--ink);
+    font:600 12px "IBM Plex Mono",monospace;
+  }
+  .holdout-tag{
+    display:inline-block; padding:1px 6px; border-radius:5px;
+    background:var(--accent-soft); color:var(--accent-text);
+    font:700 9.5px "IBM Plex Mono",monospace; letter-spacing:.04em;
+  }
+  .calib-result .holdout-line{
+    margin-top:8px; padding-top:8px;
+    border-top:1px dashed var(--line-strong);
+    line-height:1.6;
+  }
   .calib-result table{ width:100%; border-collapse:collapse; margin-top:6px; }
   .calib-result th, .calib-result td{
     text-align:right;
@@ -1077,6 +1100,10 @@
           <label>공원 실측 평균(℃) <input type="number" step="0.1" id="calibPark" placeholder="예: 28.7"></label>
           <label>물 실측 평균(℃) <input type="number" step="0.1" id="calibWater" placeholder="예: 27.9"></label>
         </div>
+        <div class="calib-holdout">
+          <label>빈터 실측 평균(℃) <span class="holdout-tag">검증용</span> <input type="number" step="0.1" id="calibGrass" placeholder="예: 30.2"></label>
+          <p class="science-note" style="margin-top:6px;">이 값은 <b>보정에 쓰지 않습니다</b>. 위 네 재질로 계수를 맞춘 뒤, 그 계수가 <b>맞추는 데 쓰지 않은</b> 빈터의 온도를 얼마나 잘 예측하는지로 모델을 검증합니다.</p>
+        </div>
         <button class="btn btn-primary" id="btnCalibrate" style="width:100%; margin-top:10px;">보정 실행</button>
         <div id="calibResult" class="calib-result" style="display:none;"></div>
       </details>
@@ -1102,7 +1129,7 @@
         </div>
 
         <button class="btn btn-primary" id="btnPdfReport" style="width:100%; margin-top:10px;">📑 PDF 탐구 보고서 생성</button>
-        <p class="summary-hint">표지·도시 요약·3D 조감도에 더해, 실행해 둔 <b>변인 통제 실험마다 한 페이지씩</b>(그래프·실험 방법·결과 해석·측정 자료) 붙여 PDF로 만듭니다.</p>
+        <p class="summary-hint">표지·도시 요약·3D 조감도에 더해, 실행해 둔 <b>변인 통제 실험마다 한 페이지씩</b>(그래프·실험 방법·결과 해석·측정 자료)과 <b>종합 결론·모델의 한계</b> 페이지를 붙여 PDF로 만듭니다.</p>
         <div id="pdfPanel" style="display:none;">
           <div class="save-row">
             <button class="btn save-btn" id="btnSavePdf">💾 PDF 저장</button>
@@ -2683,6 +2710,7 @@ function(t){t.__bidiEngine__=t.prototype.__bidiEngine__=function(t){var r,n,i,a,
   MATERIAL_KEYS.forEach(function(k){ BASE_SOURCE[k] = MATERIALS[k].base; });
   var lastOptimizeResult = null;
   var lastCalibResult = null;
+  var lastHoldout = null;
   // Wide enough that a hot measurement day or an unusual surface can still be
   // reached; a fit that lands ON a bound is reported as such rather than being
   // presented as if the search had converged.
@@ -2833,12 +2861,37 @@ function(t){t.__bidiEngine__=t.prototype.__bidiEngine__=function(t){var r,n,i,a,
     var r2Line = metricsAfter.r2 != null
       ? ("R² " + metricsAfter.r2.toFixed(2))
       : "R² 계산 불가(재질 2개 이상 실측 필요)";
+
+    // Every measured material gets its own multiplier, so the fit has as many
+    // free parameters as data points and R² near 1 is guaranteed rather than
+    // informative. The only real test is a surface that was NOT fitted: 빈터
+    // has no multiplier of its own, so its predicted temperature comes purely
+    // from the other coefficients diffusing into it.
+    var holdRaw = document.getElementById("calibGrass").value;
+    var holdoutLine = "";
+    if (holdRaw !== "" && presentTypes.grass) {
+      var predGrass = AMBIENT + (perTypeAvgTemp(grid, computeTemps(grid)).grass || 0);
+      var holdErr = predGrass - parseFloat(holdRaw);
+      var good = Math.abs(holdErr) <= 1.0;
+      holdoutLine = "<div class=\"holdout-line\"><b>검증(빈터, 보정에 쓰지 않음)</b><br>예측 " + predGrass.toFixed(2) +
+        "℃ · 실측 " + parseFloat(holdRaw).toFixed(2) + "℃ · 오차 <b style=\"color:" + (good ? "var(--good)" : "var(--heat-hot)") + "\">" +
+        (holdErr >= 0 ? "+" : "−") + Math.abs(holdErr).toFixed(2) + "℃</b>" +
+        (good ? " — 보정한 계수가 맞추는 데 쓰지 않은 지점도 1℃ 안쪽으로 예측했습니다." :
+                " — 보정에 쓰지 않은 지점에서는 오차가 큽니다. 결론을 절대 온도가 아니라 조건 사이의 상대 비교로 써 주세요.") + "</div>";
+      lastHoldout = { predicted: predGrass, measured: parseFloat(holdRaw), error: holdErr };
+    } else {
+      lastHoldout = null;
+      if (holdRaw !== "") {
+        holdoutLine = "<div class=\"holdout-line\" style=\"color:var(--ink-mute)\">검증용 빈터 값을 넣었지만 지금 격자에 빈터 칸이 없어 검증을 건너뛰었습니다.</div>";
+      }
+    }
+    var satNote = "<div style=\"color:var(--ink-mute); margin-top:6px;\">※ 재질마다 계수를 하나씩 맞추므로 측정 수와 계수 수가 같습니다. R²가 1에 가깝게 나오는 건 모델이 옳다는 증거가 아니라 <b>자유도가 없다</b>는 뜻이에요 — 위 검증란을 함께 쓰는 것을 권합니다.</div>";
     resultEl.style.display = "block";
     resultEl.innerHTML =
       "<table><thead><tr><th>재질</th><th>보정 전 계수</th><th>보정 후 계수</th></tr></thead><tbody>" + rows + "</tbody></table>" +
       "<div class=\"err-line\">RMSE " + metricsBefore.rmse.toFixed(2) + "℃ → " + metricsAfter.rmse.toFixed(2) + "℃</div>" +
-      "<div style=\"color:var(--ink-dim); margin-top:4px;\">MAE " + metricsAfter.mae.toFixed(2) + "℃ · " + r2Line + " (n=" + metricsAfter.n + ") · 기준기온 " + AMBIENT.toFixed(1) + "℃</div>" + pinnedNote + skipNote;
-    lastCalibResult = { metricsBefore: metricsBefore, metricsAfter: metricsAfter, types: activeTypes.slice() };
+      "<div style=\"color:var(--ink-dim); margin-top:4px;\">MAE " + metricsAfter.mae.toFixed(2) + "℃ · " + r2Line + " (n=" + metricsAfter.n + ") · 기준기온 " + AMBIENT.toFixed(1) + "℃</div>" + holdoutLine + satNote + pinnedNote + skipNote;
+    lastCalibResult = { metricsBefore: metricsBefore, metricsAfter: metricsAfter, types: activeTypes.slice(), holdout: lastHoldout };
 
     updateCoefTable();
     render();
@@ -2945,6 +2998,11 @@ function(t){t.__bidiEngine__=t.prototype.__bidiEngine__=function(t){var r,n,i,a,
       row("MAE (보정 후)", ma.mae.toFixed(2) + " ℃");
       row("R² (보정 후)", ma.r2 != null ? ma.r2.toFixed(2) : "계산 불가(n<2)");
       paragraph("실측 데이터로 보정된 재질: " + lastCalibResult.types.map(function(t){ return MATERIAL_LABEL[t]; }).join(", ") + " (n=" + ma.n + ")");
+      if (lastCalibResult.holdout) {
+        var ho = lastCalibResult.holdout;
+        row("검증 오차 (빈터, 미보정)", (ho.error >= 0 ? "+" : "−") + Math.abs(ho.error).toFixed(2) + " ℃",
+          Math.abs(ho.error) <= 1.0 ? "#0ca30c" : "#c04040");
+      }
     } else if (isCalibrated) {
       paragraph("이전에 보정한 계수가 적용되어 있습니다(저장된 작업에서 복원됨). 정확한 보정 오차 수치를 카드에 남기려면 실측 보정을 다시 실행해 주세요.");
     } else {
@@ -3177,6 +3235,125 @@ function(t){t.__bidiEngine__=t.prototype.__bidiEngine__=function(t){var r,n,i,a,
     return out;
   }
 
+  // Closing page of the report: the findings the team's own runs actually
+  // support, followed by what this model cannot tell them. The limitations are
+  // not boilerplate -- each one names a specific thing the simulation leaves
+  // out, so a reader can judge how far to trust the numbers on the pages above.
+  function renderConclusionPageCanvas() {
+    var W = 600, pad = 34, contentW = W - pad * 2;
+    var scratch = document.createElement("canvas");
+    scratch.width = W; scratch.height = 1800;
+    var ctx = scratch.getContext("2d");
+    var y = pad + 6;
+
+    ctx.textAlign = "left";
+    ctx.textBaseline = "alphabetic";
+    ctx.fillStyle = "#1a1d18";
+    ctx.font = "700 18px 'Gothic A1', sans-serif";
+    ctx.fillText("탐구 종합 결론", pad, y + 10);
+    y += 24;
+    ctx.font = "500 10.5px 'IBM Plex Mono', monospace";
+    ctx.fillStyle = "#8a8e7f";
+    ctx.fillText("쿨시티 그리드 시뮬레이션 결과 종합 · 기준기온 " + AMBIENT.toFixed(1) + "℃", pad, y + 10);
+    y += 22;
+    ctx.strokeStyle = "#1f7a5c"; ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.moveTo(pad, y); ctx.lineTo(W - pad, y); ctx.stroke();
+    y += 20;
+
+    function heading(text) {
+      ctx.fillStyle = "#1a1d18";
+      ctx.font = "700 13px 'Gothic A1', sans-serif";
+      ctx.fillText(text, pad, y + 10);
+      y += 22;
+    }
+    function bullet(marker, text, color) {
+      ctx.font = "600 11.5px 'IBM Plex Mono', monospace";
+      ctx.fillStyle = color || "#1f7a5c";
+      ctx.fillText(marker, pad, y + 10);
+      ctx.font = "400 11.5px 'Gothic A1', sans-serif";
+      ctx.fillStyle = "#3a3e34";
+      var lines = wrapText(ctx, text, contentW - 22);
+      lines.forEach(function(line, i){
+        ctx.fillText(line, pad + 22, y + 10 + i * 17);
+      });
+      y += lines.length * 17 + 8;
+    }
+
+    heading("1. 실험으로 확인한 것");
+    var found = LAB_ORDER.filter(function(k){ return labResults[k] && labResults[k].brief; });
+    if (found.length) {
+      found.forEach(function(k, i){
+        bullet(LAB_NUMERAL[k], labResults[k].brief);
+      });
+    } else {
+      bullet("–", "아직 실행한 변인 통제 실험이 없습니다. 탐구 실험실에서 실험을 돌리면 그 결과가 여기에 문장으로 정리됩니다.", "#8a8e7f");
+    }
+    y += 6;
+
+    heading("2. AI 배치 최적화");
+    if (lastOptimizeResult) {
+      bullet("→", "같은 녹지 예산(칸 수)을 유지한 채 위치만 옮기는 것만으로 거주역 평균기온이 " +
+        lastOptimizeResult.before.toFixed(2) + "℃에서 " + lastOptimizeResult.after.toFixed(2) + "℃로 " +
+        (lastOptimizeResult.improved >= 0 ? lastOptimizeResult.improved.toFixed(2) + "℃ 낮아졌다" : "거의 변하지 않았다") +
+        ". 예산을 늘리지 않고도 배치만으로 얻을 수 있는 몫이 있다는 뜻이다.");
+    } else {
+      bullet("–", "AI 최적화를 아직 실행하지 않았습니다.", "#8a8e7f");
+    }
+    y += 6;
+
+    heading("3. 모델 신뢰도");
+    if (lastCalibResult) {
+      var ma = lastCalibResult.metricsAfter, mb = lastCalibResult.metricsBefore;
+      bullet("✓", "실측 " + ma.n + "개 재질로 보정한 결과 RMSE " + mb.rmse.toFixed(2) + "℃ → " + ma.rmse.toFixed(2) +
+        "℃, MAE " + ma.mae.toFixed(2) + "℃" + (ma.r2 != null ? ", R² " + ma.r2.toFixed(2) : "") +
+        ". 보정한 재질: " + lastCalibResult.types.map(function(t){ return MATERIAL_LABEL[t]; }).join(", ") + ".");
+      if (lastCalibResult.holdout) {
+        var ho2 = lastCalibResult.holdout;
+        bullet(Math.abs(ho2.error) <= 1.0 ? "✓" : "!",
+          "보정에 쓰지 않은 빈터로 검증했을 때 예측 " + ho2.predicted.toFixed(2) + "℃ · 실측 " +
+          ho2.measured.toFixed(2) + "℃로 오차는 " + (ho2.error >= 0 ? "+" : "−") + Math.abs(ho2.error).toFixed(2) + "℃였다.",
+          Math.abs(ho2.error) <= 1.0 ? "#1f7a5c" : "#c07a1f");
+      } else {
+        bullet("!", "재질마다 계수를 하나씩 맞추므로 측정 수와 계수 수가 같아, 위 R² 자체는 모델이 옳다는 증거가 되지 못한다. 보정에 쓰지 않은 지점(빈터)의 실측값을 넣어 검증하는 것을 권한다.", "#c07a1f");
+      }
+    } else {
+      bullet("!", "실측값으로 보정하지 않은 기본 가정 계수를 사용했습니다. 아래 한계와 함께, 절대 온도보다 조건 사이의 상대 비교로 읽어야 합니다.", "#c07a1f");
+    }
+    y += 10;
+
+    ctx.strokeStyle = "#d9dcd0"; ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(pad, y); ctx.lineTo(W - pad, y); ctx.stroke();
+    y += 18;
+
+    heading("4. 이 모델이 다루지 못한 것 (한계)");
+    [
+      "열이 이웃 칸으로 퍼지는 거리가 1~2칸으로 제한된다. 공원 하나가 수백 미터 밖까지 식히는 실제 냉각 범위는 재현하지 못한다.",
+      "건물 높이는 3D 표현에만 쓰이고 열 계산에는 들어가지 않는다. 건물이 만드는 그늘, 협곡 효과(street canyon), 하늘시계지수(SVF)는 반영되지 않았다.",
+      "습도·증발산의 시간 변화, 에어컨 실외기 같은 인공 배열, 지형과 해풍은 모두 빠져 있다.",
+      "쿨루프·차열포장 계수는 문헌상 표면온도 저감 폭을 이 모델의 상대 눈금으로 옮긴 가정치이며, 인용 가능한 실측 계수가 아니다.",
+      "바람은 한 방향·한 세기로 일정하다고 보았고, 건물에 부딪혀 갈라지는 실제 흐름은 계산하지 않는다.",
+      "AI 최적화는 담금질 기법(simulated annealing)이라 매번 같은 답을 주지 않는다. 여러 번 실행해 결과의 폭을 함께 보고하는 것이 정확하다."
+    ].forEach(function(t){ bullet("·", t, "#8a8e7f"); });
+
+    y += 6;
+    ctx.font = "400 10px 'Gothic A1', sans-serif";
+    ctx.fillStyle = "#8a8e7f";
+    wrapText(ctx, "이 페이지의 문장은 실제로 실행한 실험 결과에서 자동으로 생성되었습니다. 보고서에 옮길 때는 팀이 직접 해석한 내용을 덧붙이고, 위 한계에 해당하는 부분은 결론의 적용 범위로 명시하는 것을 권합니다.", contentW).forEach(function(line){
+      ctx.fillText(line, pad, y + 10);
+      y += 15;
+    });
+    y += 10;
+
+    var out = document.createElement("canvas");
+    out.width = W;
+    out.height = Math.ceil(y + pad);
+    var octx = out.getContext("2d");
+    octx.fillStyle = "#fcfcfa";
+    octx.fillRect(0, 0, W, out.height);
+    octx.drawImage(scratch, 0, 0);
+    return out;
+  }
+
   function buildReportPDF() {
     var jsPDFCtor = window.jspdf.jsPDF;
     var cover = renderCoverPageCanvas();
@@ -3219,6 +3396,10 @@ function(t){t.__bidiEngine__=t.prototype.__bidiEngine__=function(t){var r,n,i,a,
       doc.addPage([page.width, page.height]);
       doc.addImage(page.toDataURL("image/png"), "PNG", 0, 0, page.width, page.height);
     });
+
+    var closing = renderConclusionPageCanvas();
+    doc.addPage([closing.width, closing.height]);
+    doc.addImage(closing.toDataURL("image/png"), "PNG", 0, 0, closing.width, closing.height);
 
     return doc;
   }
@@ -3802,6 +3983,13 @@ function(t){t.__bidiEngine__=t.prototype.__bidiEngine__=function(t){var r,n,i,a,
       usesReps: true,
       method: "<b>조작변인</b> 녹지 칸 수(0%→50%, 5%p 간격) · <b>종속변인</b> 거주역(건물·도로·빈터) 평균기온 · <b>통제변인</b> 물의 위치, 건물:도로:빈터 구성비, 시간대, 바람, 열원 계수. 각 조건마다 녹지를 무작위로 다시 배치해 반복 횟수만큼 측정하고 평균±표준편차를 냅니다.",
       steps: function(){ var out = []; for (var p = 0; p <= 50; p += 5) out.push(p); return out; },
+      brief: function(res){
+        var first = res.points[0], last = res.points[res.points.length - 1];
+        var fit = linearFit(res.points);
+        return "녹지 비율을 " + first.label + "%에서 " + last.label + "%로 늘리면 거주역 평균기온이 " +
+          (first.mean - last.mean).toFixed(2) + "℃ 낮아진다" +
+          (fit ? " (녹지 1%p당 " + Math.abs(fit.slope).toFixed(3) + "℃, R²=" + (fit.r2 != null ? fit.r2.toFixed(3) : "–") + ")" : "") + ".";
+      },
       label: function(v){ return String(v); },
       prepare: function(){ return { comp: baseComposition(grid) }; },
       run: function(v, ctxObj){
@@ -3834,6 +4022,13 @@ function(t){t.__bidiEngine__=t.prototype.__bidiEngine__=function(t){var r,n,i,a,
       usesReps: false,
       method: "<b>조작변인</b> 시각(0시→23시, 1시간 간격) · <b>종속변인</b> 거주역 평균기온 · <b>통제변인</b> 지금 캔버스의 도시 배치 그대로, 바람, 열원 계수. 배치를 전혀 바꾸지 않아 결과가 매번 같으므로 반복 측정이 필요 없습니다(n=1).",
       steps: function(){ var out = []; for (var h = 0; h < 24; h++) out.push(h); return out; },
+      brief: function(res){
+        var hot = res.points[0], cold = res.points[0];
+        res.points.forEach(function(p){ if (p.mean > hot.mean) hot = p; if (p.mean < cold.mean) cold = p; });
+        return "열섬은 " + hot.label + "시에 가장 강하고(" + hot.mean.toFixed(2) + "℃) " + cold.label +
+          "시에 가장 약해(" + cold.mean.toFixed(2) + "℃) 하루 " + (hot.mean - cold.mean).toFixed(2) +
+          "℃ 폭으로 오르내린다 — 저감 대책의 효과도 낮 시간대에 가장 크게 나타난다.";
+      },
       label: function(v){ return String(v); },
       prepare: function(){ return {}; },
       run: function(v){
@@ -3860,6 +4055,11 @@ function(t){t.__bidiEngine__=t.prototype.__bidiEngine__=function(t){var r,n,i,a,
       usesReps: false,
       method: "<b>조작변인</b> 바람 세기(0%→100%, 10%p 간격) · <b>종속변인</b> 거주역 평균기온 · <b>통제변인</b> 지금 캔버스의 도시 배치, 바람 <i>방향</i>, 시간대, 열원 계수. 방향을 고정한 채 세기만 바꾸므로 반복 측정이 필요 없습니다(n=1).",
       steps: function(){ var out = []; for (var w = 0; w <= 100; w += 10) out.push(w); return out; },
+      brief: function(res){
+        var first = res.points[0], last = res.points[res.points.length - 1];
+        return "바람 세기를 0%에서 100%로 올리면 거주역 평균기온이 " + (first.mean - last.mean).toFixed(2) +
+          "℃ 낮아진다 — 바람길 확보가 열섬 완화에 직접 기여한다.";
+      },
       label: function(v){ return String(v); },
       prepare: function(){ return {}; },
       run: function(v){
@@ -3885,6 +4085,16 @@ function(t){t.__bidiEngine__=t.prototype.__bidiEngine__=function(t){var r,n,i,a,
       method: "<b>조작변인</b> 어떤 대책에 면적을 쓸 것인가(녹지 조성·쿨루프·차열포장·수변 조성) · <b>종속변인</b> 기존 시가지 평균기온 · <b>통제변인</b> 손대는 칸 수(모든 대책에 똑같이 배정), 나머지 도시 배치, 시간대, 바람, 열원 계수. " +
         "<b>주의</b> 평균은 <i>대책을 적용하기 전</i>의 시가지 칸에 대해서만 냅니다. 녹지·수변으로 바꾼 칸을 평균에서 빼버리면 '더운 칸을 지웠을 뿐'인데도 녹지가 유리해 보이기 때문에, 같은 지점들의 온도가 실제로 얼마나 내려갔는지를 비교합니다. 대상 칸은 무작위로 고르므로 반복 횟수만큼 다시 골라 평균±표준편차를 냅니다.",
       steps: function(){ return MEASURE_ORDER.slice(); },
+      brief: function(res){
+        var byLabel = {};
+        res.points.forEach(function(p){ byLabel[p.label] = p; });
+        var basePt = byLabel[MEASURE_LABEL.none];
+        var treated = res.points.filter(function(p){ return p.label !== MEASURE_LABEL.none; })
+          .sort(function(a, b){ return a.mean - b.mean; });
+        return "같은 면적(" + res.budget + "칸)을 투입할 때 효과는 " +
+          treated.map(function(p){ return p.label + " −" + (basePt.mean - p.mean).toFixed(2) + "℃"; }).join(" > ") +
+          " 순이다.";
+      },
       label: function(v){ return MEASURE_LABEL[v]; },
       prepare: function(){
         var occIdx = [], buildings = [], roads = [], nonPark = [], nonWater = [];
@@ -3946,6 +4156,12 @@ function(t){t.__bidiEngine__=t.prototype.__bidiEngine__=function(t){var r,n,i,a,
       usesReps: true,
       method: "<b>조작변인</b> 녹지 배치 형태(집중·분산·가장자리·무작위·AI) · <b>종속변인</b> 거주역 평균기온 · <b>통제변인</b> 녹지 칸 수(현재 도시와 동일), 물의 위치, 건물:도로:빈터 구성비, 시간대, 바람, 열원 계수. 무작위형과 AI 최적화는 반복 횟수만큼 다시 실행해 평균±표준편차를 내고, 규칙이 정해진 나머지 셋은 결과가 하나로 정해집니다(n=1).",
       steps: function(){ return SHAPE_ORDER.slice(); },
+      brief: function(res){
+        var best = res.points[0], worst = res.points[0];
+        res.points.forEach(function(p){ if (p.mean < best.mean) best = p; if (p.mean > worst.mean) worst = p; });
+        return "녹지 예산이 같아도 배치 형태에 따라 " + (worst.mean - best.mean).toFixed(2) +
+          "℃가 갈리며, " + best.label + "이 가장 낮고 " + worst.label + "이 가장 높다 — 얼마나 심느냐만큼 어디에 심느냐가 중요하다.";
+      },
       label: function(v){ return SHAPE_LABEL[v]; },
       prepare: function(){
         var parkCount = grid.filter(function(t){ return t === "park"; }).length;
@@ -4291,7 +4507,8 @@ function(t){t.__bidiEngine__=t.prototype.__bidiEngine__=function(t){var r,n,i,a,
           reps: reps,
           parkCount: prepared.parkCount,
           budget: prepared.budget,
-          conclusion: exp.conclude({ points: points, parkCount: prepared.parkCount, budget: prepared.budget })
+          conclusion: exp.conclude({ points: points, parkCount: prepared.parkCount, budget: prepared.budget }),
+          brief: exp.brief({ points: points, parkCount: prepared.parkCount, budget: prepared.budget })
         }, null);
       }
     }
