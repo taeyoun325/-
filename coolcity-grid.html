@@ -41,6 +41,7 @@
     --mat-grass:    #b9c7a4;
     --mat-coolroof: #d7dee6;
     --mat-coolpave: #9aa0a8;
+    --mat-treeroad: #6ea56a;
   }
   @media (prefers-color-scheme: dark){
     :root:not([data-theme="light"]){
@@ -75,6 +76,7 @@
       --mat-grass:    #4a5240;
       --mat-coolroof: #cfd6de;
       --mat-coolpave: #767c84;
+      --mat-treeroad: #5e8f5a;
     }
   }
   :root[data-theme="dark"]{
@@ -109,6 +111,7 @@
     --mat-grass:    #4a5240;
     --mat-coolroof: #cfd6de;
     --mat-coolpave: #767c84;
+    --mat-treeroad: #5e8f5a;
   }
 
   *{ box-sizing:border-box; }
@@ -1038,11 +1041,11 @@
     <ol>
       <li><b>도시를 만듭니다.</b> 브러시로 직접 칠하거나, <b>서울·부산·제주</b> 프리셋, 또는 <b>배치도 이미지 불러오기</b>로 우리 동네 지도를 넣으세요.</li>
       <li><b>조건을 맞춥니다.</b> 측정한 날의 <b>기준기온</b>·시간대·바람을 넣고, 실측 온도가 있으면 <b>계수 보정</b>으로 모델을 우리 동네에 맞춥니다.</li>
-      <li><b>AI에게 맡깁니다.</b> <b>AI 최적화</b>는 녹지 칸 수를 그대로 둔 채 위치만 바꾸고, <b>AI 종합 설계</b>는 정해진 예산 안에서 어떤 대책(녹지·쿨루프·차열포장)을 어디에 쓸지까지 고릅니다.</li>
+      <li><b>AI에게 맡깁니다.</b> <b>AI 최적화</b>는 녹지 칸 수를 그대로 둔 채 위치만 바꾸고, <b>AI 종합 설계</b>는 정해진 예산 안에서 어떤 대책(녹지·<b>가로수길</b>·쿨루프·차열포장)을 어디에 쓸지까지 고릅니다.</li>
       <li><b>실험합니다.</b> 아래 <b>탐구 실험실</b>에서 변인을 하나씩만 바꿔 6가지 실험을 돌립니다 — <b>전체 실험 실행</b>이면 한 번에 끝납니다.</li>
       <li><b>보고서를 뽑습니다.</b> <b>PDF 탐구 보고서 생성</b>: 표지·도시 요약·3D 조감도에 실험마다 한 페이지씩, 마지막에 종합 결론과 이 모델의 한계까지 들어갑니다.</li>
     </ol>
-    <p class="onboarding-aside">알아두면 좋은 것 — 같은 <b>시드</b>면 결과가 그대로 재현되고, <b>설계안 A/B/C</b>로 우리 안을 나란히 비교하고, <b>공유 코드</b> 한 줄로 팀원에게 설계를 넘길 수 있습니다. 마우스 없이도 됩니다: 격자에서 방향키로 이동, 스페이스로 칠하기, <b>숫자키 1~7</b>로 브러시 전환, Ctrl+Z로 되돌리기.</p>
+    <p class="onboarding-aside">알아두면 좋은 것 — 같은 <b>시드</b>면 결과가 그대로 재현되고, <b>설계안 A/B/C</b>로 우리 안을 나란히 비교하고, <b>공유 코드</b> 한 줄로 팀원에게 설계를 넘길 수 있습니다. 마우스 없이도 됩니다: 격자에서 방향키로 이동, 스페이스로 칠하기, <b>숫자키 1~<span id="brushCountHint">7</span></b>로 브러시 전환, Ctrl+Z로 되돌리기.</p>
   </div>
 
   <div class="board">
@@ -1066,6 +1069,7 @@
         <span class="toolbar-label">저감 대책</span>
         <button class="brush" data-type="coolroof" aria-pressed="false" title="고반사 도료를 칠한 지붕(쿨루프). 건물을 그대로 두고 지붕 반사율만 높인 경우입니다."><span class="swatch" style="background:var(--mat-coolroof)"></span>쿨루프</button>
         <button class="brush" data-type="coolpave" aria-pressed="false" title="차열성 포장으로 바꾼 도로. 아스팔트를 걷어내지 않고 표면 처리만 바꾼 경우입니다."><span class="swatch" style="background:var(--mat-coolpave)"></span>차열포장</button>
+        <button class="brush" data-type="treeroad" aria-pressed="false" title="가로수를 심은 길. 도로를 없애지 않고 그 위에 그늘을 만듭니다 — 땅을 차지하지 않는 것이 공원과 다른 점입니다."><span class="swatch" style="background:var(--mat-treeroad)"></span>가로수길</button>
       </div>
 
       <div class="actions">
@@ -1248,11 +1252,12 @@
           <div class="coef-row"><span>도로(아스팔트)</span><span id="coefRoad">기준 대비 +7.0℃</span></div>
           <div class="coef-row"><span>쿨루프(고반사 지붕)</span><span id="coefCoolroof">기준 대비 +2.5℃</span></div>
           <div class="coef-row"><span>차열포장 도로</span><span id="coefCoolpave">기준 대비 +4.0℃</span></div>
+          <div class="coef-row"><span>가로수길(그늘·증산)</span><span id="coefTreeroad">기준 대비 +3.0℃</span></div>
           <div class="coef-row"><span>빈터(나지)</span><span id="coefGrass">기준 대비 −1.0℃</span></div>
           <div class="coef-row"><span>공원·녹지(증발산)</span><span id="coefPark">기준 대비 −3.5℃</span></div>
           <div class="coef-row"><span>물(하천·수역)</span><span id="coefWater">기준 대비 −5.5℃</span></div>
         </div>
-        <p class="science-note">각 칸의 온도는 지표 재질별 열원값을 격자 확산(diffusion) 방식으로 10회 반복 계산해 이웃 칸과 열이 섞이는 효과를 근사한 값입니다. 모델에 들어간 가정은 여섯 가지입니다. <b>① 시간대</b>: 태양열 세기를 0.25배(야간)~1.2배(오후 1~2시 정점)로 스케일링합니다. <b>② 바람의 이류</b>: 상풍 쪽 이웃 칸에 가중치를 더 줘 하풍 방향으로 열이 더 강하게 퍼집니다. <b>③ 열린 경계</b>: 격자 바깥은 <b>기준기온</b>(위 환경 설정에서 지정, 기본 24℃)의 주변 공기로 보고 가장자리 칸이 그 공기와 열을 주고받습니다. 이 모델의 열은 이웃으로 1~2칸까지만 눈에 띄게 퍼지므로, 경계 효과도 가장 바깥 한두 줄이 약 0.1~0.7℃ 낮아지는 정도로 나타납니다(같은 이유로 공원 한 칸의 냉각 효과도 바로 옆 1~2칸까지입니다). <b>④ 환기 효과</b>: 바람이 셀수록 지표에서 공기로 열이 빠져나가는 속도가 빨라져 열섬 세기 자체가 최대 35%까지 줄어듭니다. <b>⑤ 저감 대책 재질</b>: 쿨루프는 지붕 반사율(알베도)을 높여 흡수하는 태양복사를 줄인 지붕, 차열포장은 표면 처리로 축열을 줄인 도로를 뜻합니다. 각각 원래 재질(건물 +5.5℃, 도로 +7.0℃)의 열원값을 <b>+2.5℃·+4.0℃</b>로 낮춰 잡았는데, 이는 문헌상 보고되는 표면온도 저감 폭을 이 모델의 상대 눈금으로 옮긴 <b>가정치</b>이지 인용 가능한 실측 계수가 아닙니다. 실측 보정 시에는 원래 재질(건물·도로)의 보정 배율을 그대로 따라갑니다. <b>⑥ 건물 높이</b>: 높이는 서로 반대 방향으로 작용하는 두 가지 효과로 열 계산에 들어갑니다. <b>낮에는 그늘</b> — 태양 쪽에 더 높은 건물이 있으면 직달 일사를 가려 그 칸의 태양 성분을 최대 45%까지 깎습니다(해가 낮을수록 그림자가 길어집니다). <b>밤에는 캐니언 효과</b> — 같은 높이가 하늘을 가려(하늘시계지수 SVF↓) 낮 동안 데워진 열이 빠져나가지 못하고 건물 사이에서 되반사됩니다. 그래서 빽빽한 블록은 한낮엔 트인 곳보다 시원하고 <b>새벽엔 더 덥습니다</b> — 실제 열섬의 일주기 모양입니다. 실제 실외 실측값이 아니라 배치 전략을 비교하기 위한 상대적 모델이며, 아래 보정 기능으로 실제 측정 데이터와 맞춰볼 수 있습니다.</p>
+        <p class="science-note">각 칸의 온도는 지표 재질별 열원값을 격자 확산(diffusion) 방식으로 10회 반복 계산해 이웃 칸과 열이 섞이는 효과를 근사한 값입니다. 모델에 들어간 가정은 여섯 가지입니다. <b>① 시간대</b>: 태양열 세기를 0.25배(야간)~1.2배(오후 1~2시 정점)로 스케일링합니다. <b>② 바람의 이류</b>: 상풍 쪽 이웃 칸에 가중치를 더 줘 하풍 방향으로 열이 더 강하게 퍼집니다. <b>③ 열린 경계</b>: 격자 바깥은 <b>기준기온</b>(위 환경 설정에서 지정, 기본 24℃)의 주변 공기로 보고 가장자리 칸이 그 공기와 열을 주고받습니다. 이 모델의 열은 이웃으로 1~2칸까지만 눈에 띄게 퍼지므로, 경계 효과도 가장 바깥 한두 줄이 약 0.1~0.7℃ 낮아지는 정도로 나타납니다(같은 이유로 공원 한 칸의 냉각 효과도 바로 옆 1~2칸까지입니다). <b>④ 환기 효과</b>: 바람이 셀수록 지표에서 공기로 열이 빠져나가는 속도가 빨라져 열섬 세기 자체가 최대 35%까지 줄어듭니다. <b>⑤ 저감 대책 재질</b>: 쿨루프는 지붕 반사율(알베도)을 높여 흡수하는 태양복사를 줄인 지붕, 차열포장은 표면 처리로 축열을 줄인 도로, <b>가로수길</b>은 도로를 그대로 둔 채 그 위에 수관(樹冠)을 덮은 길을 뜻합니다(열원값 +3.0℃). 가로수길은 <b>땅을 차지하지 않는다</b>는 점에서 공원과 다르고, 수관이 실제 높이를 가지므로 위 ⑥의 그늘 계산을 통해 <b>옆 칸까지 그늘을 드리웁니다</b> — 가로수가 효과를 내는 주된 이유입니다. 각각 원래 재질(건물 +5.5℃, 도로 +7.0℃)의 열원값을 <b>+2.5℃·+4.0℃</b>로 낮춰 잡았는데, 이는 문헌상 보고되는 표면온도 저감 폭을 이 모델의 상대 눈금으로 옮긴 <b>가정치</b>이지 인용 가능한 실측 계수가 아닙니다. 실측 보정 시에는 원래 재질(건물·도로)의 보정 배율을 그대로 따라갑니다. <b>⑥ 건물 높이</b>: 높이는 서로 반대 방향으로 작용하는 두 가지 효과로 열 계산에 들어갑니다. <b>낮에는 그늘</b> — 태양 쪽에 더 높은 건물이 있으면 직달 일사를 가려 그 칸의 태양 성분을 최대 45%까지 깎습니다(해가 낮을수록 그림자가 길어집니다). <b>밤에는 캐니언 효과</b> — 같은 높이가 하늘을 가려(하늘시계지수 SVF↓) 낮 동안 데워진 열이 빠져나가지 못하고 건물 사이에서 되반사됩니다. 그래서 빽빽한 블록은 한낮엔 트인 곳보다 시원하고 <b>새벽엔 더 덥습니다</b> — 실제 열섬의 일주기 모양입니다. 실제 실외 실측값이 아니라 배치 전략을 비교하기 위한 상대적 모델이며, 아래 보정 기능으로 실제 측정 데이터와 맞춰볼 수 있습니다.</p>
       </details>
 
       <details class="science" id="calibPanel">
@@ -1832,6 +1837,13 @@ function(t){t.__bidiEngine__=t.prototype.__bidiEngine__=function(t){var r,n,i,a,
     road:     { label: "도로",      base: 7.0,  occupied: true,  movable: true,  iso: "road" },
     coolroof: { label: "쿨루프",    base: 2.5,  occupied: true,  movable: true,  iso: "building", family: "building" },
     coolpave: { label: "차열포장",  base: 4.0,  occupied: true,  movable: true,  iso: "road",     family: "road" },
+    // 가로수길 is the measure Korean cities actually reach for most, and it is
+    // structurally unlike a park: it does not consume the land. The asphalt
+    // stays and keeps storing heat, but the canopy blocks most of the direct
+    // sun on it and transpires, so it lands between 차열포장 and 공원. The
+    // canopy also has real height, so it shades its NEIGHBOURS through the same
+    // machinery buildings use -- which is most of why street trees work.
+    treeroad: { label: "가로수길",  base: 3.0,  occupied: true,  movable: true,  iso: "road",     family: "road", canopy: true },
     park:     { label: "공원·녹지", base: -3.5, occupied: false, movable: false, iso: "park" },
     water:    { label: "물",        base: -5.5, occupied: false, movable: false, iso: "water" },
     grass:    { label: "빈터",      base: -1.0, occupied: true,  movable: false, iso: "grass" }
@@ -2224,7 +2236,7 @@ function(t){t.__bidiEngine__=t.prototype.__bidiEngine__=function(t){var r,n,i,a,
       MATERIAL_LABEL[grid[i]] + ", " + (AMBIENT + temps[i]).toFixed(1) + "도";
   }
   // number keys follow the order the brush buttons appear in
-  var BRUSH_KEYS = ["building", "road", "park", "water", "grass", "coolroof", "coolpave"];
+  var BRUSH_KEYS = ["building", "road", "park", "water", "grass", "coolroof", "coolpave", "treeroad"];
   gridEl.addEventListener("keydown", function(e){
     var x = focusIdx % SIZE, y = Math.floor(focusIdx / SIZE);
     var moved = -1;
@@ -2384,6 +2396,8 @@ function(t){t.__bidiEngine__=t.prototype.__bidiEngine__=function(t){var r,n,i,a,
   function isoShapeOf(type) { return MATERIALS[type].iso; }
   function cellHeight(i, type) {
     var pr = (i >= 0 && i < N) ? CELL_PR[i] : pseudoRand(i);
+    // a street-tree canopy stands well above the road it covers
+    if (MATERIALS[type].canopy) return 1.15 + pr * 0.55;
     switch (isoShapeOf(type)) {
       case "building": return 1.8 + pr * 4.2;
       case "road": return 0.12;
@@ -2489,6 +2503,23 @@ function(t){t.__bidiEngine__=t.prototype.__bidiEngine__=function(t){var r,n,i,a,
     isoCtx.ellipse(g[0], g[1], hw * 0.15, hh * 0.24, 0, 0, Math.PI * 2);
     isoCtx.fillStyle = "rgba(255,255,255,0.92)";
     isoCtx.fill();
+  }
+  function drawTreeCanopy(i, baseX, topY, hw, hh) {
+    // three overlapping crowns per tile, seeded per cell so a street reads as a
+    // row of individual trees rather than a green stripe
+    for (var t = 0; t < 3; t++) {
+      var pr1 = pseudoRand(i * 23 + t * 5 + 1), pr2 = pseudoRand(i * 23 + t * 5 + 2);
+      var cx = baseX + (pr1 - 0.5) * hw * 1.25;
+      var cy = topY + (pr2 - 0.5) * hh * 0.85 - hh * 0.15;
+      isoCtx.beginPath();
+      isoCtx.ellipse(cx, cy, hw * 0.30, hh * 0.52, 0, 0, Math.PI * 2);
+      isoCtx.fillStyle = "rgba(58,104,52,0.80)";
+      isoCtx.fill();
+      isoCtx.beginPath();
+      isoCtx.ellipse(cx - hw * 0.07, cy - hh * 0.16, hw * 0.15, hh * 0.26, 0, 0, Math.PI * 2);
+      isoCtx.fillStyle = "rgba(110,165,106,0.85)";
+      isoCtx.fill();
+    }
   }
   function drawCoolPaveTexture(baseX, topY, hw, hh) {
     // stronger than a first pass used: the tile's own edge stroke already reads
@@ -2679,6 +2710,8 @@ function(t){t.__bidiEngine__=t.prototype.__bidiEngine__=function(t){var r,n,i,a,
         isoCtx.beginPath(); isoCtx.ellipse(c1x - hw*0.08, c1y - hh*0.12, hw*0.14, hh*0.22, 0, 0, Math.PI*2); isoCtx.fill();
       } else if (shape === "road") {
         drawRoadLife(o.i, baseX, topY, hw, hh, animPhase);
+        // canopy last: it is above the street, so it covers what is on it
+        if (type === "treeroad") drawTreeCanopy(o.i, baseX, topY, hw, hh);
       }
     }
   }
@@ -3562,7 +3595,8 @@ function(t){t.__bidiEngine__=t.prototype.__bidiEngine__=function(t){var r,n,i,a,
         lp.improved > 0.02 ? "#087f08" : "#55594c");
       row("사용 예산", lp.spent + " / " + lp.budget + " 점");
       paragraph("AI가 고른 조합: 녹지 " + lp.counts.park + "칸 · 쿨루프 " + lp.counts.coolroof +
-        "칸 · 차열포장 " + lp.counts.coolpave + "칸 (기존 시가지 " + lp.scored + "칸 평균 기준)");
+        "칸 · 차열포장 " + lp.counts.coolpave + "칸 · 가로수길 " + (lp.counts.treeroad || 0) +
+        "칸 (기존 시가지 " + lp.scored + "칸 평균 기준)");
     }
     y += 4;
 
@@ -3848,7 +3882,7 @@ function(t){t.__bidiEngine__=t.prototype.__bidiEngine__=function(t){var r,n,i,a,
       var lp2 = lastPlanResult;
       bullet("→", "예산 " + lp2.budget + "점(사용 " + lp2.spent + "점) 안에서 AI가 고른 조합은 녹지 " +
         lp2.counts.park + "칸 · 쿨루프 " + lp2.counts.coolroof + "칸 · 차열포장 " + lp2.counts.coolpave +
-        "칸이었고, 기존 시가지 평균기온이 " + lp2.before.toFixed(2) + "℃에서 " + lp2.after.toFixed(2) +
+        "칸 · 가로수길 " + (lp2.counts.treeroad || 0) + "칸이었고, 기존 시가지 평균기온이 " + lp2.before.toFixed(2) + "℃에서 " + lp2.after.toFixed(2) +
         "℃로 " + lp2.improved.toFixed(2) + "℃ 낮아졌다. 예산이 적을수록 값싼 표면 대책(쿨루프·차열포장)에 몰리고, 예산이 커질수록 비싼 녹지 조성이 늘어난다.");
     }
     y += 6;
@@ -4550,9 +4584,10 @@ function(t){t.__bidiEngine__=t.prototype.__bidiEngine__=function(t){var r,n,i,a,
     return idx.length ? sum / idx.length : 0;
   }
 
-  var MEASURE_ORDER = ["none", "park", "coolroof", "coolpave", "water"];
+  var MEASURE_ORDER = ["none", "park", "treeroad", "coolroof", "coolpave", "water"];
   var MEASURE_LABEL = {
-    none: "대책 없음", park: "녹지 조성", coolroof: "쿨루프", coolpave: "차열포장", water: "수변 조성"
+    none: "대책 없음", park: "녹지 조성", treeroad: "가로수길",
+    coolroof: "쿨루프", coolpave: "차열포장", water: "수변 조성"
   };
   var SHAPE_ORDER = ["compact", "spread", "edge", "random", "ai"];
   var SHAPE_LABEL = {
@@ -4736,7 +4771,7 @@ function(t){t.__bidiEngine__=t.prototype.__bidiEngine__=function(t){var r,n,i,a,
       xHeader: "저감 대책",
       mode: "bar",
       usesReps: true,
-      method: "<b>조작변인</b> 어떤 대책에 면적을 쓸 것인가(녹지 조성·쿨루프·차열포장·수변 조성) · <b>종속변인</b> 기존 시가지 평균기온 · <b>통제변인</b> 손대는 칸 수(모든 대책에 똑같이 배정), 나머지 도시 배치, 시간대, 바람, 열원 계수. " +
+      method: "<b>조작변인</b> 어떤 대책에 면적을 쓸 것인가(녹지 조성·가로수길·쿨루프·차열포장·수변 조성) · <b>종속변인</b> 기존 시가지 평균기온 · <b>통제변인</b> 손대는 칸 수(모든 대책에 똑같이 배정), 나머지 도시 배치, 시간대, 바람, 열원 계수. " +
         "<b>주의</b> 평균은 <i>대책을 적용하기 전</i>의 시가지 칸에 대해서만 냅니다. 녹지·수변으로 바꾼 칸을 평균에서 빼버리면 '더운 칸을 지웠을 뿐'인데도 녹지가 유리해 보이기 때문에, 같은 지점들의 온도가 실제로 얼마나 내려갔는지를 비교합니다. 대상 칸은 무작위로 고르므로 반복 횟수만큼 다시 골라 평균±표준편차를 냅니다.",
       steps: function(){ return MEASURE_ORDER.slice(); },
       brief: function(res){
@@ -4768,7 +4803,7 @@ function(t){t.__bidiEngine__=t.prototype.__bidiEngine__=function(t){var r,n,i,a,
           return { error: "이 실험은 건물과 도로 양쪽에 같은 면적을 투입해 비교합니다. 건물과 도로를 각각 최소 5칸 이상 칠한 뒤 다시 실행해 주세요(지금: 건물 " + buildings.length + "칸, 도로 " + roads.length + "칸)." };
         }
         return { occIdx: occIdx, budget: budget, pools: {
-          none: [], park: nonPark, coolroof: buildings, coolpave: roads, water: nonWater
+          none: [], park: nonPark, treeroad: roads, coolroof: buildings, coolpave: roads, water: nonWater
         } };
       },
       repsFor: function(v, reps){ return v === "none" ? 1 : reps; },
@@ -4797,7 +4832,7 @@ function(t){t.__bidiEngine__=t.prototype.__bidiEngine__=function(t){var r,n,i,a,
           return (i + 1) + "위 " + p.label + "(−" + (basePt.mean - p.mean).toFixed(2) + "℃)";
         }).join(" · ") + ".";
         if (treated.length > 1) txt += sigNote(treated[0], treated[1], "1위와 2위 대책");
-        txt += " 다만 쿨루프는 지붕만, 차열포장은 도로만 바꿀 수 있어 실제로 확보 가능한 면적이 서로 다르므로, 이 순위는 '같은 면적일 때'의 비교라는 점을 보고서에 함께 밝혀 주세요.";
+        txt += " 다만 쿨루프는 지붕만, 차열포장과 가로수길은 도로만 바꿀 수 있어 실제로 확보 가능한 면적이 서로 다르므로, 이 순위는 '같은 면적일 때'의 비교라는 점을 보고서에 함께 밝혀 주세요.";
         return txt;
       }
     },
@@ -5344,6 +5379,11 @@ function(t){t.__bidiEngine__=t.prototype.__bidiEngine__=function(t){var r,n,i,a,
 
   selectExperiment("green");
 
+  // written from the brush table rather than typed into the copy: the literal
+  // "1~5" survived two brushes being added and told students to press keys
+  // that did nothing
+  document.getElementById("brushCountHint").textContent = String(BRUSH_KEYS.length);
+
   // ---- 설계안 보관함 (A / B / C) ----
   // The experiments sweep one variable automatically; this is the other half of
   // an inquiry -- holding a team's OWN designs against each other. Slots store
@@ -5443,9 +5483,23 @@ function(t){t.__bidiEngine__=t.prototype.__bidiEngine__=function(t){var r,n,i,a,
   // the whole design -- layout, the conditions it was drawn under, and any
   // calibrated coefficients -- into one line that survives being pasted into a
   // chat message, so nobody has to email an HTML file around.
-  var SHARE_CHAR = { building: "b", road: "r", coolroof: "c", coolpave: "v", park: "p", water: "w", grass: "g" };
+  // One letter per material. Letters are fixed forever, not derived from the
+  // materials table, so a code written today still decodes after a new material
+  // is added -- but that also means adding a material without adding its letter
+  // silently produces corrupt codes (it did, once). The check below turns that
+  // into a loud failure instead.
+  var SHARE_CHAR = {
+    building: "b", road: "r", coolroof: "c", coolpave: "v",
+    treeroad: "t", park: "p", water: "w", grass: "g"
+  };
   var SHARE_TYPE = {};
   Object.keys(SHARE_CHAR).forEach(function(k){ SHARE_TYPE[SHARE_CHAR[k]] = k; });
+  (function(){
+    var missing = MATERIAL_KEYS.filter(function(k){ return !SHARE_CHAR[k]; });
+    if (missing.length) {
+      console.error("공유 코드: 다음 재질에 문자가 없습니다 —", missing.join(", "));
+    }
+  })();
 
   // Run-length encoding: cities are drawn in blocks and stripes, so runs are
   // long and this shortens the payload several-fold over one char per cell.
@@ -5476,6 +5530,9 @@ function(t){t.__bidiEngine__=t.prototype.__bidiEngine__=function(t){var r,n,i,a,
   }
 
   function buildShareCode() {
+    for (var i = 0; i < N; i++) {
+      if (!SHARE_CHAR[grid[i]]) return null;
+    }
     var parts = [
       "CCG1",
       SIZE,
@@ -5542,6 +5599,10 @@ function(t){t.__bidiEngine__=t.prototype.__bidiEngine__=function(t){var r,n,i,a,
 
   document.getElementById("btnShareMake").addEventListener("click", function(){
     var code = buildShareCode();
+    if (!code) {
+      setSaveStatus(shareStatusEl, "err", "이 버전에서 공유 코드로 옮길 수 없는 재질이 있습니다. 개발자 콘솔의 안내를 확인해 주세요.");
+      return;
+    }
     shareOutEl.value = code;
     shareOutEl.style.display = "block";
     setSaveStatus(shareStatusEl, "", code.length + "자 · 아래 코드를 복사해 팀원에게 보내세요");
@@ -5576,16 +5637,23 @@ function(t){t.__bidiEngine__=t.prototype.__bidiEngine__=function(t){var r,n,i,a,
   // park as cheaply as you can paint its roof, and cool roofs exist precisely
   // BECAUSE the building has to stay. Pricing the interventions restores the
   // trade-off the students are actually supposed to reason about.
+  // Relative construction burden per unit area. The first pass had street trees
+  // at 3 and full repaving at 1, which is backwards: resurfacing a carriageway
+  // is major roadworks, while planting along an existing kerb is the cheap
+  // thing cities actually do at scale. With the prices inverted the planner
+  // never chose trees at all -- not because trees are ineffective but because
+  // they were mispriced against the alternatives.
   var TREATMENT_COST = {
-    "building>coolroof": 1,  // 지붕 도색
-    "road>coolpave":     1,  // 표면 재포장
+    "building>coolroof": 1,  // 지붕 도료 도포
+    "road>treeroad":     2,  // 기존 도로변 가로수 식재
     "grass>park":        2,  // 공터를 공원으로
-    "road>park":         4,  // 도로를 줄이고 녹지화
+    "road>coolpave":     3,  // 차도 전면 재포장
+    "road>park":         5,  // 도로 폭을 줄여 녹지화
     "building>park":     8   // 건물을 철거하고 공원 조성
   };
   var COST_LABEL = [
-    ["건물 → 쿨루프", 1], ["도로 → 차열포장", 1], ["빈터 → 녹지", 2],
-    ["도로 → 녹지", 4], ["건물 → 녹지(철거)", 8]
+    ["건물 → 쿨루프", 1], ["도로 → 가로수길", 2], ["빈터 → 녹지", 2],
+    ["도로 → 차열포장", 3], ["도로 → 녹지", 5], ["건물 → 녹지(철거)", 8]
   ];
   var plannerRunning = false;
   var lastPlanResult = null;
@@ -5596,7 +5664,7 @@ function(t){t.__bidiEngine__=t.prototype.__bidiEngine__=function(t){var r,n,i,a,
 
   function treatmentsFor(baseType) {
     if (baseType === "building") return ["coolroof", "park"];
-    if (baseType === "road") return ["coolpave", "park"];
+    if (baseType === "road") return ["coolpave", "treeroad", "park"];
     if (baseType === "grass") return ["park"];
     return null;
   }
@@ -5782,7 +5850,7 @@ function(t){t.__bidiEngine__=t.prototype.__bidiEngine__=function(t){var r,n,i,a,
     }
 
     function finish() {
-      var counts = { park: 0, coolroof: 0, coolpave: 0 };
+      var counts = { park: 0, coolroof: 0, coolpave: 0, treeroad: 0 };
       var out = base.slice();
       var touched = [];
       var best = planner.best;
@@ -5806,7 +5874,8 @@ function(t){t.__bidiEngine__=t.prototype.__bidiEngine__=function(t){var r,n,i,a,
         "<div class=\"plan-delta\">" + (AMBIENT + beforeAvg).toFixed(2) + "℃ → <b>" + (AMBIENT + bestAvg).toFixed(2) +
         "℃</b> <span class=\"good\">−" + improved.toFixed(2) + "℃</span></div>" +
         "<div class=\"plan-mix\">AI가 고른 조합 · 녹지 <b>" + counts.park + "</b>칸 · 쿨루프 <b>" + counts.coolroof +
-        "</b>칸 · 차열포장 <b>" + counts.coolpave + "</b>칸 · 사용 예산 <b>" + planner.bestSpent + "</b>/" + budget +
+        "</b>칸 · 차열포장 <b>" + counts.coolpave + "</b>칸 · 가로수길 <b>" + counts.treeroad +
+        "</b>칸 · 사용 예산 <b>" + planner.bestSpent + "</b>/" + budget +
         "점 · 시드 <b>" + runSeed + "</b></div>" +
         "<p class=\"science-note\">기존 시가지 " + sets.scoreIdx.length + "칸의 평균기온 기준입니다. 예산별 저감량 곡선은 아래 <b>탐구 실험실 ⑥</b>에서 한 번에 그릴 수 있어요. 같은 시드로 다시 실행하면 같은 조합이 나오고, 시드를 바꾸면 달라집니다. 되돌리기로 이전 도시로 돌아갈 수 있습니다.</p>";
 
