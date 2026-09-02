@@ -1350,7 +1350,7 @@
       </label>
       <span class="lab-status" id="labStatus" role="status" aria-live="polite">대기 중</span>
     </div>
-    <p class="lab-seednote">무작위 배치와 AI 탐색은 <b>시드</b>에서 나옵니다. <b>같은 시드 + 같은 도시 = 같은 결과</b>이므로, 보고서에 적은 수치를 나중에 그대로 재현할 수 있어요. 다른 경우를 보고 싶으면 <b>새 시드</b>로 바꾸고, 보고서에는 <b>어떤 시드로 얻은 값인지</b> 함께 적어 주세요. (시드는 실험·AI 최적화·AI 종합 설계에 적용되며, 도시를 새로 그리는 '무작위 도시 생성'에는 적용되지 않습니다.)</p>
+    <p class="lab-seednote">그래프의 오차막대와 표의 ±95%CI는 <b>평균의 95% 신뢰구간</b>입니다(개별 배치가 흩어진 폭인 표준편차와 다릅니다 — 표준편차는 CSV에 함께 들어갑니다). 두 조건의 막대가 <b>겹치지 않으면</b> 그 차이는 배치 운으로 설명되지 않습니다. 무작위 배치와 AI 탐색은 <b>시드</b>에서 나옵니다. <b>같은 시드 + 같은 도시 = 같은 결과</b>이므로, 보고서에 적은 수치를 나중에 그대로 재현할 수 있어요. 다른 경우를 보고 싶으면 <b>새 시드</b>로 바꾸고, 보고서에는 <b>어떤 시드로 얻은 값인지</b> 함께 적어 주세요. (시드는 실험·AI 최적화·AI 종합 설계에 적용되며, 도시를 새로 그리는 '무작위 도시 생성'에는 적용되지 않습니다.)</p>
 
     <div class="lab-body">
       <div class="lab-chart-wrap">
@@ -3723,7 +3723,7 @@ function(t){t.__bidiEngine__=t.prototype.__bidiEngine__=function(t){var r,n,i,a,
     y += 20;
 
     var cols = res.hasSd
-      ? [res.xHeader, "평균기온(℃)", "표준편차(℃)", "n"]
+      ? [res.xHeader, "평균기온(℃)", "±95%CI", "SD", "n"]
       : [res.xHeader, "평균기온(℃)"];
     var tableW = Math.min(contentW, 150 + cols.length * 108);
     var colW = tableW / cols.length;
@@ -3740,7 +3740,9 @@ function(t){t.__bidiEngine__=t.prototype.__bidiEngine__=function(t){var r,n,i,a,
 
     res.points.forEach(function(p){
       var cells = res.hasSd
-        ? [p.label, p.mean.toFixed(2), p.n > 1 ? p.sd.toFixed(2) : "–", String(p.n)]
+        ? [p.label, p.mean.toFixed(2),
+           p.n > 1 && p.ci != null ? p.ci.toFixed(2) : "–",
+           p.n > 1 ? p.sd.toFixed(2) : "–", String(p.n)]
         : [p.label, p.mean.toFixed(2)];
       cells.forEach(function(c, i){
         ctx.textAlign = i === 0 ? "left" : "right";
@@ -4284,19 +4286,52 @@ function(t){t.__bidiEngine__=t.prototype.__bidiEngine__=function(t){var r,n,i,a,
     }
     return arr;
   }
+  // Two-sided 95% critical values of Student's t by degrees of freedom. Small
+  // n is the normal case here (a student is not going to sit through 200
+  // repetitions), and at n=6 the normal approximation 1.96 understates the
+  // interval by a quarter, so the table matters.
+  var T95 = [12.706, 4.303, 3.182, 2.776, 2.571, 2.447, 2.365, 2.306, 2.262, 2.228,
+             2.201, 2.179, 2.160, 2.145, 2.131, 2.120, 2.110, 2.101, 2.093, 2.086,
+             2.080, 2.074, 2.069, 2.064, 2.060, 2.056, 2.052, 2.048, 2.045, 2.042];
+  function tCrit95(df) { return df < 1 ? NaN : (df <= T95.length ? T95[df - 1] : 1.96); }
+
+  // SD describes how far one random LAYOUT strays; the standard error describes
+  // how well the repeated runs pin down the MEAN. Every claim the report makes
+  // ("30% green is cooler than 25%") is a claim about means, so the confidence
+  // interval is the statistic that belongs on the chart -- SD would overstate
+  // the uncertainty of the comparison and hide real differences.
   function meanSd(vals) {
     var n = vals.length;
     var mean = 0;
     for (var i = 0; i < n; i++) mean += vals[i];
     mean /= n;
-    var sd = 0;
+    var sd = 0, sem = 0, ci = 0;
     if (n > 1) {
       var acc = 0;
       for (var k = 0; k < n; k++) acc += (vals[k] - mean) * (vals[k] - mean);
       sd = Math.sqrt(acc / (n - 1));
+      sem = sd / Math.sqrt(n);
+      ci = tCrit95(n - 1) * sem;
     }
-    return { mean: mean, sd: sd, n: n };
+    return { mean: mean, sd: sd, sem: sem, ci: ci, n: n };
   }
+  // Do two conditions' 95% intervals stay apart? Non-overlap is a conservative
+  // stand-in for "the difference is not just placement luck" -- it is stricter
+  // than a two-sample t-test, so when it holds the claim is safe to make, and
+  // when it fails the honest answer is "not distinguishable at this n".
+  function ciSeparated(a, b) {
+    if (!a || !b || a.n < 2 || b.n < 2) return null;
+    var ea = a.ci != null ? a.ci : a.sd, eb = b.ci != null ? b.ci : b.sd;
+    return Math.abs(a.mean - b.mean) > (ea + eb);
+  }
+  function sigNote(a, b, whatDiffers) {
+    var sep = ciSeparated(a, b);
+    if (sep === null) return "";
+    return sep
+      ? " 두 조건의 95% 신뢰구간이 겹치지 않으므로, 이 차이는 <b>배치 운으로 설명되지 않습니다</b>."
+      : " 다만 두 조건의 95% 신뢰구간이 겹칩니다 — 이 반복 횟수로는 " + whatDiffers + "를 <b>구별했다고 말할 수 없습니다</b>. 반복을 늘려 다시 확인해 보세요.";
+  }
+
   function linearFit(points) {
     var n = points.length;
     if (n < 2) return null;
@@ -4558,6 +4593,7 @@ function(t){t.__bidiEngine__=t.prototype.__bidiEngine__=function(t){var r,n,i,a,
             "로, 녹지 1%p를 늘릴 때마다 평균 " + Math.abs(fit.slope).toFixed(3) + "℃씩 " +
             (fit.slope < 0 ? "낮아지는" : "높아지는") + " 경향입니다.";
         }
+        txt += sigNote(first, last, "두 녹지 비율");
         return txt;
       }
     },
@@ -4751,6 +4787,7 @@ function(t){t.__bidiEngine__=t.prototype.__bidiEngine__=function(t){var r,n,i,a,
         txt += " 순위: " + treated.map(function(p, i){
           return (i + 1) + "위 " + p.label + "(−" + (basePt.mean - p.mean).toFixed(2) + "℃)";
         }).join(" · ") + ".";
+        if (treated.length > 1) txt += sigNote(treated[0], treated[1], "1위와 2위 대책");
         txt += " 다만 쿨루프는 지붕만, 차열포장은 도로만 바꿀 수 있어 실제로 확보 가능한 면적이 서로 다르므로, 이 순위는 '같은 면적일 때'의 비교라는 점을 보고서에 함께 밝혀 주세요.";
         return txt;
       }
@@ -4806,11 +4843,8 @@ function(t){t.__bidiEngine__=t.prototype.__bidiEngine__=function(t){var r,n,i,a,
         if (ai && rnd) {
           var gain = rnd.mean - ai.mean;
           txt += " AI 최적화 배치는 같은 예산의 무작위 배치보다 평균 <b>" + gain.toFixed(2) + "℃</b> " +
-            (gain >= 0 ? "낮았고" : "높았고");
-          if (rnd.sd > 0.0005) {
-            txt += " (무작위 배치 표준편차 " + rnd.sd.toFixed(2) + "℃의 <b>" + (gain / rnd.sd).toFixed(1) + "배</b>)";
-          }
-          txt += ".";
+            (gain >= 0 ? "낮았습니다" : "높았습니다") + ".";
+          txt += sigNote(ai, rnd, "AI 배치와 무작위 배치");
         }
         if (spread && byLabel[SHAPE_LABEL.compact]) {
           var d = byLabel[SHAPE_LABEL.compact].mean - spread.mean;
@@ -4886,7 +4920,8 @@ function(t){t.__bidiEngine__=t.prototype.__bidiEngine__=function(t){var r,n,i,a,
     ctx.fillStyle = pal.bg;
     ctx.fillRect(0, 0, W, H);
 
-    var L = 62, R = 18, T = headless ? 20 : 46, B = res.mode === "bar" ? 68 : 52;
+    // three header lines when titled (name / controls / what the bars mean)
+    var L = 62, R = 18, T = headless ? 20 : 58, B = res.mode === "bar" ? 68 : 52;
     var plotW = W - L - R, plotH = H - T - B;
     var n = res.points.length;
 
@@ -4899,12 +4934,14 @@ function(t){t.__bidiEngine__=t.prototype.__bidiEngine__=function(t){var r,n,i,a,
       ctx.font = "500 10px 'IBM Plex Mono', monospace";
       ctx.fillStyle = pal.mute;
       ctx.fillText("통제: " + res.control, 14, 37);
+      if (res.hasSd) ctx.fillText("오차막대 = 평균의 95% 신뢰구간 (n은 표 참조)", 14, 50);
     }
 
     var lo = Infinity, hi = -Infinity;
     res.points.forEach(function(p){
-      lo = Math.min(lo, p.mean - p.sd);
-      hi = Math.max(hi, p.mean + p.sd);
+      var err = (p.ci != null) ? p.ci : p.sd;
+      lo = Math.min(lo, p.mean - err);
+      hi = Math.max(hi, p.mean + err);
     });
     if (!isFinite(lo)) { lo = 0; hi = 1; }
     var span = hi - lo;
@@ -4980,12 +5017,14 @@ function(t){t.__bidiEngine__=t.prototype.__bidiEngine__=function(t){var r,n,i,a,
       ctx.stroke();
     }
 
-    // error bars (± sample SD), drawn on top of both mark types
+    // error bars: 95% confidence interval of the mean (results stored by an
+    // older version only carry SD, so fall back to it rather than drawing none)
     ctx.strokeStyle = pal.dim;
     ctx.lineWidth = 1.1;
     res.points.forEach(function(p, i){
-      if (p.sd <= 0.005) return;
-      var x = xOf(i), yTop = yOf(p.mean + p.sd), yBot = yOf(p.mean - p.sd);
+      var err = (p.ci != null) ? p.ci : p.sd;
+      if (!(err > 0.005)) return;
+      var x = xOf(i), yTop = yOf(p.mean + err), yBot = yOf(p.mean - err);
       ctx.beginPath();
       ctx.moveTo(x, yTop); ctx.lineTo(x, yBot);
       ctx.moveTo(x - 3.5, yTop); ctx.lineTo(x + 3.5, yTop);
@@ -5041,7 +5080,7 @@ function(t){t.__bidiEngine__=t.prototype.__bidiEngine__=function(t){var r,n,i,a,
   function labChartToCanvas(res, scale, opts) {
     res = res || lastLabResult;
     scale = scale || 2;
-    var H = (opts && opts.noTitle) ? LAB_CHART_H - 26 : LAB_CHART_H;
+    var H = (opts && opts.noTitle) ? LAB_CHART_H - 38 : LAB_CHART_H;
     var c = document.createElement("canvas");
     c.width = LAB_CHART_W * scale;
     c.height = H * scale;
@@ -5058,11 +5097,12 @@ function(t){t.__bidiEngine__=t.prototype.__bidiEngine__=function(t){var r,n,i,a,
     var bestIdx = 0;
     res.points.forEach(function(p, i){ if (p.mean < res.points[bestIdx].mean) bestIdx = i; });
     var head = "<thead><tr><th>" + res.xHeader + "</th><th>평균(℃)</th>" +
-      (res.hasSd ? "<th>±SD</th><th>n</th>" : "") + "</tr></thead>";
+      (res.hasSd ? "<th title=\"평균의 95% 신뢰구간\">±95%CI</th><th>n</th>" : "") + "</tr></thead>";
     var body = res.points.map(function(p, i){
+      var err = (p.ci != null) ? p.ci : p.sd;
       return "<tr class=\"" + (i === bestIdx ? "best" : "") + "\"><td>" + p.label + "</td><td>" +
         p.mean.toFixed(2) + "</td>" +
-        (res.hasSd ? "<td>" + (p.n > 1 ? p.sd.toFixed(2) : "–") + "</td><td>" + p.n + "</td>" : "") +
+        (res.hasSd ? "<td>" + (p.n > 1 ? err.toFixed(2) : "–") + "</td><td>" + p.n + "</td>" : "") +
         "</tr>";
     }).join("");
     labTableEl.innerHTML = head + "<tbody>" + body + "</tbody>";
@@ -5078,9 +5118,15 @@ function(t){t.__bidiEngine__=t.prototype.__bidiEngine__=function(t){var r,n,i,a,
       return t + "=" + SOURCE[t].toFixed(2);
     }).join(" "));
     rows.push("# 생성시각," + new Date().toLocaleString("ko-KR"));
-    rows.push([res.xHeader, "평균기온(℃)", "표준편차(℃)", "반복수"].join(","));
+    rows.push([res.xHeader, "평균기온(℃)", "표준편차(℃)", "표준오차(℃)", "95%신뢰구간반폭(℃)", "반복수"].join(","));
     res.points.forEach(function(p){
-      rows.push([p.label, p.mean.toFixed(3), p.n > 1 ? p.sd.toFixed(3) : "", p.n].join(","));
+      rows.push([
+        p.label, p.mean.toFixed(3),
+        p.n > 1 ? p.sd.toFixed(3) : "",
+        p.n > 1 && p.sem != null ? p.sem.toFixed(3) : "",
+        p.n > 1 && p.ci != null ? p.ci.toFixed(3) : "",
+        p.n
+      ].join(","));
     });
     return rows.join("\r\n");
   }
@@ -5116,7 +5162,7 @@ function(t){t.__bidiEngine__=t.prototype.__bidiEngine__=function(t){var r,n,i,a,
         points.push({
           x: typeof x === "number" ? x : idx,
           label: exp.label(x),
-          mean: st.mean, sd: st.sd, n: st.n
+          mean: st.mean, sd: st.sd, sem: st.sem, ci: st.ci, n: st.n
         });
         idx++;
         var now = (window.performance && performance.now) ? performance.now() : Date.now();
