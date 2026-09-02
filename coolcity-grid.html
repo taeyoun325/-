@@ -1202,6 +1202,12 @@
           </div>
         </div>
         <div class="env-row">
+          <span class="env-label">상대습도 <b id="humidityLabel">70%</b></span>
+          <input type="range" id="humiditySlider" min="30" max="95" step="5" value="70" aria-label="상대습도(%)">
+        </div>
+        <p class="env-note">공원·물·가로수의 냉각은 대부분 <b>증발산</b>입니다. 공기가 이미 눅눅하면 증발이 잘 안 되므로 <b>습한 날에는 녹지 효과가 약해집니다</b>. 기본값 70%는 우리나라 여름 오후에 가까운 값이며, 이 도구의 열원 계수는 그 습도를 기준으로 적어 둔 값입니다.</p>
+
+        <div class="env-row">
           <span class="env-label">기준기온 <b id="ambientLabel">24.0℃</b></span>
           <div class="wind-controls">
             <input type="number" id="ambientInput" min="-10" max="50" step="0.1" value="24" aria-label="기준기온(그늘·배경 기온, ℃)">
@@ -1268,7 +1274,7 @@
           <div class="coef-row"><span>공원·녹지(증발산)</span><span id="coefPark">기준 대비 −3.5℃</span></div>
           <div class="coef-row"><span>물(하천·수역)</span><span id="coefWater">기준 대비 −5.5℃</span></div>
         </div>
-        <p class="science-note">각 칸의 온도는 지표 재질별 열원값을 격자 확산(diffusion) 방식으로 10회 반복 계산해 이웃 칸과 열이 섞이는 효과를 근사한 값입니다. 모델에 들어간 가정은 여섯 가지입니다. <b>① 시간대</b>: 태양열 세기를 0.25배(야간)~1.2배(오후 1~2시 정점)로 스케일링합니다. <b>② 바람의 이류</b>: 상풍 쪽 이웃 칸에 가중치를 더 줘 하풍 방향으로 열이 더 강하게 퍼집니다. <b>③ 열린 경계</b>: 격자 바깥은 <b>기준기온</b>(위 환경 설정에서 지정, 기본 24℃)의 주변 공기로 보고 가장자리 칸이 그 공기와 열을 주고받습니다. 이 모델의 열은 이웃으로 1~2칸까지만 눈에 띄게 퍼지므로, 경계 효과도 가장 바깥 한두 줄이 약 0.1~0.7℃ 낮아지는 정도로 나타납니다(같은 이유로 공원 한 칸의 냉각 효과도 바로 옆 1~2칸까지입니다). <b>④ 환기 효과</b>: 바람이 셀수록 지표에서 공기로 열이 빠져나가는 속도가 빨라져 열섬 세기 자체가 최대 35%까지 줄어듭니다. <b>⑤ 저감 대책 재질</b>: 쿨루프는 지붕 반사율(알베도)을 높여 흡수하는 태양복사를 줄인 지붕, 차열포장은 표면 처리로 축열을 줄인 도로, <b>가로수길</b>은 도로를 그대로 둔 채 그 위에 수관(樹冠)을 덮은 길을 뜻합니다(열원값 +3.0℃). 가로수길은 <b>땅을 차지하지 않는다</b>는 점에서 공원과 다르고, 수관이 실제 높이를 가지므로 위 ⑥의 그늘 계산을 통해 <b>옆 칸까지 그늘을 드리웁니다</b> — 가로수가 효과를 내는 주된 이유입니다. 각각 원래 재질(건물 +5.5℃, 도로 +7.0℃)의 열원값을 <b>+2.5℃·+4.0℃</b>로 낮춰 잡았는데, 이는 문헌상 보고되는 표면온도 저감 폭을 이 모델의 상대 눈금으로 옮긴 <b>가정치</b>이지 인용 가능한 실측 계수가 아닙니다. 실측 보정 시에는 원래 재질(건물·도로)의 보정 배율을 그대로 따라갑니다. <b>⑥ 건물 높이</b>: 높이는 서로 반대 방향으로 작용하는 두 가지 효과로 열 계산에 들어갑니다. <b>낮에는 그늘</b> — 태양 쪽에 더 높은 건물이 있으면 직달 일사를 가려 그 칸의 태양 성분을 최대 45%까지 깎습니다(해가 낮을수록 그림자가 길어집니다). <b>밤에는 캐니언 효과</b> — 같은 높이가 하늘을 가려(하늘시계지수 SVF↓) 낮 동안 데워진 열이 빠져나가지 못하고 건물 사이에서 되반사됩니다. 그래서 빽빽한 블록은 한낮엔 트인 곳보다 시원하고 <b>새벽엔 더 덥습니다</b> — 실제 열섬의 일주기 모양입니다. 실제 실외 실측값이 아니라 배치 전략을 비교하기 위한 상대적 모델이며, 아래 보정 기능으로 실제 측정 데이터와 맞춰볼 수 있습니다.</p>
+        <p class="science-note">각 칸의 온도는 지표 재질별 열원값을 격자 확산(diffusion) 방식으로 10회 반복 계산해 이웃 칸과 열이 섞이는 효과를 근사한 값입니다. 모델에 들어간 가정은 일곱 가지입니다. <b>① 시간대</b>: 태양열 세기를 0.25배(야간)~1.2배(오후 1~2시 정점)로 스케일링합니다. <b>② 바람의 이류</b>: 상풍 쪽 이웃 칸에 가중치를 더 줘 하풍 방향으로 열이 더 강하게 퍼집니다. <b>③ 열린 경계</b>: 격자 바깥은 <b>기준기온</b>(위 환경 설정에서 지정, 기본 24℃)의 주변 공기로 보고 가장자리 칸이 그 공기와 열을 주고받습니다. 이 모델의 열은 이웃으로 1~2칸까지만 눈에 띄게 퍼지므로, 경계 효과도 가장 바깥 한두 줄이 약 0.1~0.7℃ 낮아지는 정도로 나타납니다(같은 이유로 공원 한 칸의 냉각 효과도 바로 옆 1~2칸까지입니다). <b>④ 환기 효과</b>: 바람이 셀수록 지표에서 공기로 열이 빠져나가는 속도가 빨라져 열섬 세기 자체가 최대 35%까지 줄어듭니다. <b>⑤ 저감 대책 재질</b>: 쿨루프는 지붕 반사율(알베도)을 높여 흡수하는 태양복사를 줄인 지붕, 차열포장은 표면 처리로 축열을 줄인 도로, <b>가로수길</b>은 도로를 그대로 둔 채 그 위에 수관(樹冠)을 덮은 길을 뜻합니다(열원값 +3.0℃). 가로수길은 <b>땅을 차지하지 않는다</b>는 점에서 공원과 다르고, 수관이 실제 높이를 가지므로 위 ⑥의 그늘 계산을 통해 <b>옆 칸까지 그늘을 드리웁니다</b> — 가로수가 효과를 내는 주된 이유입니다. 각각 원래 재질(건물 +5.5℃, 도로 +7.0℃)의 열원값을 <b>+2.5℃·+4.0℃</b>로 낮춰 잡았는데, 이는 문헌상 보고되는 표면온도 저감 폭을 이 모델의 상대 눈금으로 옮긴 <b>가정치</b>이지 인용 가능한 실측 계수가 아닙니다. 실측 보정 시에는 원래 재질(건물·도로)의 보정 배율을 그대로 따라갑니다. <b>⑥ 건물 높이</b>: 높이는 서로 반대 방향으로 작용하는 두 가지 효과로 열 계산에 들어갑니다. <b>낮에는 그늘</b> — 태양 쪽에 더 높은 건물이 있으면 직달 일사를 가려 그 칸의 태양 성분을 최대 45%까지 깎습니다(해가 낮을수록 그림자가 길어집니다). <b>밤에는 캐니언 효과</b> — 같은 높이가 하늘을 가려(하늘시계지수 SVF↓) 낮 동안 데워진 열이 빠져나가지 못하고 건물 사이에서 되반사됩니다. 그래서 빽빽한 블록은 한낮엔 트인 곳보다 시원하고 <b>새벽엔 더 덥습니다</b> — 실제 열섬의 일주기 모양입니다. <b>⑦ 습도와 증발산</b>: 공원·물·빈터·가로수길의 냉각은 상당 부분 <b>증발산</b>이고, 이 부분만 상대습도에 따라 달라집니다(건물·도로·쿨루프·차열포장은 영향 없음). 공기가 눅눅하면 증발이 잘 일어나지 않아 <b>녹지 대책의 효과가 줄어듭니다</b>. 건조도에 정비례하지는 않게 잡았는데, 토양 수분과 가용 에너지가 증발산의 상한이기 때문입니다. 위 계수들은 모두 <b>상대습도 70%</b>(우리나라 여름 오후에 가까운 값) 기준으로 적은 값입니다. 실제 실외 실측값이 아니라 배치 전략을 비교하기 위한 상대적 모델이며, 아래 보정 기능으로 실제 측정 데이터와 맞춰볼 수 있습니다.</p>
       </details>
 
       <details class="science" id="calibPanel">
@@ -1358,9 +1364,10 @@
       <button class="lab-tab" data-exp="green" role="tab" aria-selected="true">① 녹지 비율 → 기온</button>
       <button class="lab-tab" data-exp="hour" role="tab" aria-selected="false">② 시간대 → 기온</button>
       <button class="lab-tab" data-exp="wind" role="tab" aria-selected="false">③ 바람 세기 → 기온</button>
-      <button class="lab-tab" data-exp="shape" role="tab" aria-selected="false">④ 녹지 배치 형태 → 기온</button>
-      <button class="lab-tab" data-exp="measure" role="tab" aria-selected="false">⑤ 저감 대책별 효과</button>
-      <button class="lab-tab" data-exp="budget" role="tab" aria-selected="false">⑥ 예산 → 저감량</button>
+      <button class="lab-tab" data-exp="humidity" role="tab" aria-selected="false">④ 습도 → 기온</button>
+      <button class="lab-tab" data-exp="shape" role="tab" aria-selected="false">⑤ 녹지 배치 형태 → 기온</button>
+      <button class="lab-tab" data-exp="measure" role="tab" aria-selected="false">⑥ 저감 대책별 효과</button>
+      <button class="lab-tab" data-exp="budget" role="tab" aria-selected="false">⑦ 예산 → 저감량</button>
     </div>
 
     <p class="lab-method" id="labMethod"></p>
@@ -1844,20 +1851,25 @@ function(t){t.__bidiEngine__=t.prototype.__bidiEngine__=function(t){var r,n,i,a,
   //   iso      3D 조감도에서 어떤 모양으로 그릴지
   //   family   보정 시 어느 재질의 계수 배율을 따라갈지
   var MATERIALS = {
-    building: { label: "건물",      base: 5.5,  occupied: true,  movable: true,  iso: "building" },
-    road:     { label: "도로",      base: 7.0,  occupied: true,  movable: true,  iso: "road" },
-    coolroof: { label: "쿨루프",    base: 2.5,  occupied: true,  movable: true,  iso: "building", family: "building" },
-    coolpave: { label: "차열포장",  base: 4.0,  occupied: true,  movable: true,  iso: "road",     family: "road" },
+    // `evap` is how much of the coefficient comes from EVAPORATION rather than
+    // from radiation and shading. It is the part that weakens when the air is
+    // already damp, which is exactly the case in a Korean summer — a model that
+    // lumps it into one number tells a team that a park cools the same amount
+    // in 장마철 as on a dry day, and it does not.
+    building: { label: "건물",      base: 5.5,  evap: 0,    occupied: true,  movable: true,  iso: "building" },
+    road:     { label: "도로",      base: 7.0,  evap: 0,    occupied: true,  movable: true,  iso: "road" },
+    coolroof: { label: "쿨루프",    base: 2.5,  evap: 0,    occupied: true,  movable: true,  iso: "building", family: "building" },
+    coolpave: { label: "차열포장",  base: 4.0,  evap: 0,    occupied: true,  movable: true,  iso: "road",     family: "road" },
     // 가로수길 is the measure Korean cities actually reach for most, and it is
     // structurally unlike a park: it does not consume the land. The asphalt
     // stays and keeps storing heat, but the canopy blocks most of the direct
     // sun on it and transpires, so it lands between 차열포장 and 공원. The
     // canopy also has real height, so it shades its NEIGHBOURS through the same
     // machinery buildings use -- which is most of why street trees work.
-    treeroad: { label: "가로수길",  base: 3.0,  occupied: true,  movable: true,  iso: "road",     family: "road", canopy: true },
-    park:     { label: "공원·녹지", base: -3.5, occupied: false, movable: false, iso: "park" },
-    water:    { label: "물",        base: -5.5, occupied: false, movable: false, iso: "water" },
-    grass:    { label: "빈터",      base: -1.0, occupied: true,  movable: false, iso: "grass" }
+    treeroad: { label: "가로수길",  base: 3.0,  evap: -1.2, occupied: true,  movable: true,  iso: "road",     family: "road", canopy: true },
+    park:     { label: "공원·녹지", base: -3.5, evap: -2.6, occupied: false, movable: false, iso: "park" },
+    water:    { label: "물",        base: -5.5, evap: -4.6, occupied: false, movable: false, iso: "water" },
+    grass:    { label: "빈터",      base: -1.0, evap: -0.6, occupied: true,  movable: false, iso: "grass" }
   };
   var MATERIAL_KEYS = Object.keys(MATERIALS);
   var MATERIAL_LABEL = {};
@@ -1867,6 +1879,36 @@ function(t){t.__bidiEngine__=t.prototype.__bidiEngine__=function(t){var r,n,i,a,
     SOURCE[k] = MATERIALS[k].base;
   });
   var MOVABLE_KEYS = MATERIAL_KEYS.filter(function(k){ return MATERIALS[k].movable; });
+
+  // Relative humidity, as a percentage. 70% is a typical Korean summer
+  // afternoon and is the reference the coefficients above are quoted at, so the
+  // default reproduces every number this tool produced before humidity existed.
+  var REF_HUMIDITY = 70;
+  var humidity = REF_HUMIDITY;
+  // Evaporation rises as the air gets drier (vapour-pressure deficit), but
+  // sub-linearly: a park cannot transpire without limit just because the air is
+  // thirsty — soil moisture and available energy cap it. A straight ratio was
+  // steep enough that the clamp flattened everything below about 52% RH, which
+  // reads as a broken slider; the exponent keeps the curve monotone across the
+  // whole range instead.
+  function evapFactor(rh) {
+    var f = Math.pow((100 - rh) / (100 - REF_HUMIDITY), 0.7);
+    return Math.max(0.25, Math.min(2.0, f));
+  }
+  // Effective coefficient per material at a given humidity. Calibration scales
+  // the whole coefficient, so the dry and evaporative halves are scaled by the
+  // same fitted multiplier before recombining -- at the reference humidity this
+  // returns exactly SOURCE[k].
+  function sourceAtHumidity(src, rh) {
+    var f = evapFactor(rh);
+    var out = {};
+    MATERIAL_KEYS.forEach(function(k){
+      var base = MATERIALS[k].base, ev = MATERIALS[k].evap || 0;
+      var scale = base !== 0 ? (src[k] / base) : 1;
+      out[k] = scale * ((base - ev) + ev * f);
+    });
+    return out;
+  }
 
   // Background ("shade") air temperature the whole map is expressed relative to.
   // Field measurements are taken on a particular day, so a team that measured a
@@ -2056,7 +2098,9 @@ function(t){t.__bidiEngine__=t.prototype.__bidiEngine__=function(t){var r,n,i,a,
     var hour = (env && env.hour != null) ? env.hour : hourOfDay;
     var dir = (env && env.windDir) || windDir;
     var strength = (env && env.windStrength != null) ? env.windStrength : windStrength;
-    var src = (env && env.source) || SOURCE;
+    var baseSrc = (env && env.source) || SOURCE;
+    var rh = (env && env.humidity != null) ? env.humidity : humidity;
+    var src = (rh === REF_HUMIDITY) ? baseSrc : sourceAtHumidity(baseSrc, rh);
     var intensity = intensityForHour(hour);
     var wind = WIND_VECTORS[dir];
     var wx = wind[0] * strength, wy = wind[1] * strength;
@@ -2406,6 +2450,7 @@ function(t){t.__bidiEngine__=t.prototype.__bidiEngine__=function(t){var r,n,i,a,
   var legendMidEl = document.getElementById("legendMid");
   var legendHighEl = document.getElementById("legendHigh");
   function updateEnvLabels() {
+    document.getElementById("humidityLabel").textContent = humidity + "%";
     document.getElementById("ambientLabel").textContent = AMBIENT.toFixed(1) + "℃";
     legendLowEl.textContent = (AMBIENT - DOMAIN).toFixed(0) + "℃ 저온";
     legendMidEl.textContent = AMBIENT.toFixed(0) + "℃ 기준";
@@ -2425,6 +2470,11 @@ function(t){t.__bidiEngine__=t.prototype.__bidiEngine__=function(t){var r,n,i,a,
   });
   document.getElementById("windStrength").addEventListener("input", function(e){
     windStrength = (+e.target.value) / 100;
+    updateEnvLabels();
+    render();
+  });
+  document.getElementById("humiditySlider").addEventListener("input", function(e){
+    humidity = +e.target.value;
     updateEnvLabels();
     render();
   });
@@ -3643,6 +3693,7 @@ function(t){t.__bidiEngine__=t.prototype.__bidiEngine__=function(t){var r,n,i,a,
     row("녹지 비율", document.getElementById("statGreen").textContent.replace("%","") + " %");
     row("기준기온(배경)", AMBIENT.toFixed(1) + " ℃");
     row("측정 조건", formatHour(hourOfDay) + " · 바람 " + (windStrength === 0 ? "없음" : WIND_LABELS[windDir] + " " + Math.round(windStrength*100) + "%"));
+    row("상대습도", humidity + " %");
     row("난수 시드", labSeedEl.value);
     y += 8;
 
@@ -4012,7 +4063,7 @@ function(t){t.__bidiEngine__=t.prototype.__bidiEngine__=function(t){var r,n,i,a,
     [
       "열이 이웃 칸으로 퍼지는 거리가 1~2칸으로 제한된다. 공원 하나가 수백 미터 밖까지 식히는 실제 냉각 범위는 재현하지 못한다.",
       "건물 높이는 그늘과 하늘시계지수(SVF)로만 들어간다. 높이는 칸마다 정해진 가상값이고, 실제 건물의 층수·향·형태를 반영한 것이 아니다.",
-      "습도·증발산의 시간 변화, 에어컨 실외기 같은 인공 배열, 지형과 해풍은 모두 빠져 있다.",
+      "습도는 하루 내내 고정된 값으로 두었고 시간에 따라 변하지 않는다. 에어컨 실외기 같은 인공 배열, 지형과 해풍은 아예 빠져 있다.",
       "쿨루프·차열포장 계수는 문헌상 표면온도 저감 폭을 이 모델의 상대 눈금으로 옮긴 가정치이며, 인용 가능한 실측 계수가 아니다.",
       "바람은 한 방향·한 세기로 일정하다고 보았고, 건물에 부딪혀 갈라지는 실제 흐름은 계산하지 않는다.",
       "AI 최적화는 담금질 기법(simulated annealing)이라 시드에 따라 다른 답을 낸다. 같은 시드로는 그대로 재현되지만, 결론을 낼 때는 시드를 몇 개 바꿔 결과의 폭을 함께 보고하는 것이 정확하다."
@@ -4171,6 +4222,7 @@ function(t){t.__bidiEngine__=t.prototype.__bidiEngine__=function(t){var r,n,i,a,
       return t + "=" + SOURCE[t].toFixed(2);
     }).join(" "));
     rows.push("# 기준기온(℃)," + AMBIENT.toFixed(2));
+    rows.push("# 상대습도(%)," + humidity);
     rows.push("# 생성시각," + new Date().toLocaleString("ko-KR"));
     rows.push(["행(y)", "열(x)", "재질", "예상기온(℃)", "기준대비(℃)"].join(","));
     for (var i = 0; i < N; i++) {
@@ -4694,6 +4746,7 @@ function(t){t.__bidiEngine__=t.prototype.__bidiEngine__=function(t){var r,n,i,a,
   function controlSummary() {
     return "시간대 " + formatHour(hourOfDay) +
       " · 바람 " + (windStrength === 0 ? "없음" : WIND_LABELS[windDir] + " " + Math.round(windStrength*100) + "%") +
+      " · 습도 " + humidity + "%" +
       " · 기준기온 " + AMBIENT.toFixed(1) + "℃" +
       " · 격자 " + SIZE + "×" + SIZE;
   }
@@ -4798,6 +4851,35 @@ function(t){t.__bidiEngine__=t.prototype.__bidiEngine__=function(t){var r,n,i,a,
           last.mean.toFixed(2) + "℃</b>가 되어 " +
           (diff >= 0 ? "<b>" + diff.toFixed(2) + "℃ 낮아졌습니다</b>" : "<b>" + Math.abs(diff).toFixed(2) + "℃ 높아졌습니다</b>") +
           ". 이 모델의 바람은 열을 없애는 것이 아니라 <b>상풍 쪽 칸의 열을 하풍 쪽으로 더 강하게 옮기는</b> 근사이므로, 시원한 녹지·수변이 바람이 불어오는 쪽에 있을수록 이득이 커집니다. 바람 <i>방향</i>을 바꿔 다시 실험해 비교해 보세요.";
+      }
+    },
+
+    humidity: {
+      title: "상대습도에 따른 거주역 평균기온",
+      xLabel: "상대습도 (%)",
+      yLabel: "거주역 평균기온 (℃)",
+      xHeader: "상대습도(%)",
+      mode: "line",
+      usesReps: false,
+      method: "<b>조작변인</b> 상대습도(30%→95%, 5%p 간격) · <b>종속변인</b> 거주역 평균기온 · <b>통제변인</b> 지금 캔버스의 도시 배치, 시간대, 바람, 열원 계수. 배치를 바꾸지 않아 결과가 매번 같으므로 반복이 필요 없습니다(n=1). 습도는 <b>증발산으로 식는 재질</b>(공원·물·빈터·가로수길)에만 작용하고, 건물·도로·쿨루프·차열포장에는 영향이 없습니다.",
+      steps: function(){ var out = []; for (var h = 30; h <= 95; h += 5) out.push(h); return out; },
+      label: function(v){ return String(v); },
+      prepare: function(){ return {}; },
+      run: function(v){
+        return AMBIENT + occupiedStats(grid, computeTemps(grid, { humidity: v })).avg;
+      },
+      conclude: function(res){
+        var dry = res.points[0], wet = res.points[res.points.length - 1];
+        return "공기가 건조할 때(" + dry.label + "%) 거주역 평균기온은 <b>" + dry.mean.toFixed(2) +
+          "℃</b>, 눅눅할 때(" + wet.label + "%)는 <b>" + wet.mean.toFixed(2) + "℃</b>로 <b>" +
+          (wet.mean - dry.mean).toFixed(2) + "℃</b> 차이가 납니다. 같은 도시인데 온도가 달라지는 이유는 " +
+          "공원·물·가로수의 냉각이 대부분 <b>증발산</b>이고, 습한 공기에서는 증발이 잘 일어나지 않기 때문입니다. " +
+          "장마철처럼 습한 날에는 녹지 대책의 효과가 줄어드니, 보고서에 <b>어떤 습도에서 얻은 결과인지</b> 꼭 함께 적어 주세요.";
+      },
+      brief: function(res){
+        var dry = res.points[0], wet = res.points[res.points.length - 1];
+        return "같은 도시라도 건조할 때(" + dry.label + "%)와 습할 때(" + wet.label + "%)의 평균기온이 " +
+          (wet.mean - dry.mean).toFixed(2) + "℃ 차이 난다 — 녹지의 냉각이 증발산에 의존하기 때문이다.";
       }
     },
 
@@ -5036,8 +5118,8 @@ function(t){t.__bidiEngine__=t.prototype.__bidiEngine__=function(t){var r,n,i,a,
   // every experiment the student has finished, keyed by id, so the PDF report
   // can carry all of them rather than only whichever tab was open last
   var labResults = {};
-  var LAB_ORDER = ["green", "hour", "wind", "shape", "measure", "budget"];
-  var LAB_NUMERAL = { green: "①", hour: "②", wind: "③", shape: "④", measure: "⑤", budget: "⑥" };
+  var LAB_ORDER = ["green", "hour", "wind", "humidity", "shape", "measure", "budget"];
+  var LAB_NUMERAL = { green: "①", hour: "②", wind: "③", humidity: "④", shape: "⑤", measure: "⑥", budget: "⑦" };
   var labRunning = false;
 
   var LAB_LIGHT_PALETTE = {
@@ -5644,7 +5726,8 @@ function(t){t.__bidiEngine__=t.prototype.__bidiEngine__=function(t){var r,n,i,a,
       windDir,
       Math.round(windStrength * 100),
       MATERIAL_KEYS.map(function(k){ return k + "=" + SOURCE[k].toFixed(2); }).join(","),
-      rleEncode(grid)
+      rleEncode(grid),
+      humidity
     ];
     // the payload is ASCII by construction, so plain btoa is safe here
     return "CCG-" + btoa(parts.join("|")).replace(/=+$/, "");
@@ -5683,6 +5766,10 @@ function(t){t.__bidiEngine__=t.prototype.__bidiEngine__=function(t){var r,n,i,a,
     if (WIND_VECTORS[p[4]]) windDir = p[4];
     var ws = parseInt(p[5], 10);
     if (isFinite(ws)) windStrength = Math.max(0, Math.min(100, ws)) / 100;
+    // appended after the fact: a code written before humidity existed simply
+    // has no field 8, and the reference humidity is the right reading of that
+    var rh = parseInt(p[8], 10);
+    humidity = isFinite(rh) ? Math.max(30, Math.min(95, rh)) : REF_HUMIDITY;
 
     if (codeSize !== SIZE) setGridSize(codeSize, cells);
     else grid = cells;
@@ -5693,6 +5780,7 @@ function(t){t.__bidiEngine__=t.prototype.__bidiEngine__=function(t){var r,n,i,a,
     document.getElementById("hourSlider").value = hourOfDay;
     document.getElementById("windDir").value = windDir;
     document.getElementById("windStrength").value = Math.round(windStrength * 100);
+    document.getElementById("humiditySlider").value = humidity;
     ambientInput.value = AMBIENT;
     updateEnvLabels();
     updateCoefTable();
@@ -6023,6 +6111,7 @@ function(t){t.__bidiEngine__=t.prototype.__bidiEngine__=function(t){var r,n,i,a,
         windStrength: windStrength,
         source: SOURCE,
         ambient: AMBIENT,
+        humidity: humidity,
         size: SIZE,
         seed: labSeedEl.value,
         scenarios: scenarios,
@@ -6061,6 +6150,7 @@ function(t){t.__bidiEngine__=t.prototype.__bidiEngine__=function(t){var r,n,i,a,
         });
       }
       if (typeof state.ambient === "number") AMBIENT = state.ambient;
+      if (typeof state.humidity === "number") humidity = Math.max(30, Math.min(95, state.humidity));
       if (state.seed != null && isFinite(parseInt(state.seed, 10))) labSeedEl.value = parseInt(state.seed, 10);
       if (state.scenarios && typeof state.scenarios === "object") {
         SCENARIO_KEYS.forEach(function(k){
@@ -6107,6 +6197,7 @@ function(t){t.__bidiEngine__=t.prototype.__bidiEngine__=function(t){var r,n,i,a,
     document.getElementById("hourSlider").value = hourOfDay;
     document.getElementById("windDir").value = windDir;
     document.getElementById("windStrength").value = Math.round(windStrength * 100);
+    document.getElementById("humiditySlider").value = humidity;
     ambientInput.value = AMBIENT;
     updateEnvLabels();
     updateCoefTable();
