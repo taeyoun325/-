@@ -1052,13 +1052,13 @@
     <button class="onboarding-close" id="onboardingClose" aria-label="도움말 닫기">×</button>
     <strong>탐구 보고서까지 가는 길</strong>
     <ol>
-      <li><b>도시를 만듭니다.</b> 브러시로 직접 칠하거나, <b>서울·부산·제주</b> 프리셋, 또는 <b>배치도 이미지 불러오기</b>로 우리 동네 지도를 넣으세요.</li>
-      <li><b>조건을 맞춥니다.</b> 측정한 날의 <b>기준기온</b>·시간대·바람을 넣고, 실측 온도가 있으면 <b>계수 보정</b>으로 모델을 우리 동네에 맞춥니다.</li>
+      <li><b>도시를 만듭니다.</b> 브러시로 직접 칠하거나, <b>서울·부산·제주</b> 프리셋, 또는 <b>배치도 이미지 불러오기</b>로 우리 동네 지도를 넣으세요. 동네를 세밀하게 그리려면 <b>격자 해상도</b>를 24×24로 올리면 됩니다.</li>
+      <li><b>조건을 맞춥니다.</b> 측정한 날의 <b>기준기온</b>·시간대·바람·<b>습도</b>를 넣고, 실측 온도가 있으면 <b>계수 보정</b>으로 모델을 우리 동네에 맞춥니다.</li>
       <li><b>AI에게 맡깁니다.</b> <b>AI 최적화</b>는 녹지 칸 수를 그대로 둔 채 위치만 바꾸고, <b>AI 종합 설계</b>는 정해진 예산 안에서 어떤 대책(녹지·<b>가로수길</b>·쿨루프·차열포장)을 어디에 쓸지까지 고릅니다.</li>
-      <li><b>실험합니다.</b> 아래 <b>탐구 실험실</b>에서 변인을 하나씩만 바꿔 6가지 실험을 돌립니다 — <b>전체 실험 실행</b>이면 한 번에 끝납니다.</li>
+      <li><b>실험합니다.</b> 아래 <b>탐구 실험실</b>에서 변인을 하나씩만 바꿔 <b><span id="expCountHint">7</span>가지 실험</b>을 돌립니다 — <b>전체 실험 실행</b>이면 한 번에 끝납니다.</li>
       <li><b>보고서를 뽑습니다.</b> <b>PDF 탐구 보고서 생성</b>: 표지·도시 요약·3D 조감도에 실험마다 한 페이지씩, 마지막에 종합 결론과 이 모델의 한계까지 들어갑니다.</li>
     </ol>
-    <p class="onboarding-aside">알아두면 좋은 것 — 같은 <b>시드</b>면 결과가 그대로 재현되고, <b>설계안 A/B/C</b>로 우리 안을 나란히 비교하고, <b>공유 코드</b> 한 줄로 팀원에게 설계를 넘길 수 있습니다. 마우스 없이도 됩니다: 격자에서 방향키로 이동, 스페이스로 칠하기, <b>숫자키 1~<span id="brushCountHint">7</span></b>로 브러시 전환, Ctrl+Z로 되돌리기.</p>
+    <p class="onboarding-aside">알아두면 좋은 것 — 같은 <b>시드</b>면 결과가 그대로 재현되고, <b>설계안 A/B/C</b>로 우리 안을 나란히 비교하고, <b>공유 코드</b> 한 줄로 팀원에게 설계를 넘길 수 있습니다. <b>3D 조감도</b>는 끌어서 이동하고 휠로 확대해 골목까지 들여다볼 수 있어요. 마우스 없이도 됩니다: 격자에서 방향키로 이동, 스페이스로 칠하기, <b>숫자키 1~<span id="brushCountHint">7</span></b>로 브러시 전환, Ctrl+Z로 되돌리기.</p>
   </div>
 
   <div class="board">
@@ -1344,7 +1344,7 @@
         </div>
 
         <button class="btn" id="btnGridCsv" style="width:100%; margin-top:10px;">🧾 격자 원자료 CSV 내보내기</button>
-        <p class="summary-hint">324개 칸의 재질과 예상 온도를 표로 저장합니다. 엑셀에서 직접 평균·표준편차를 내거나 그래프를 그릴 때 쓰세요.</p>
+        <p class="summary-hint"><span id="gridCsvCount">324</span>개 칸의 재질과 예상 온도를 표로 저장합니다. 엑셀에서 직접 평균·표준편차를 내거나 그래프를 그릴 때 쓰세요.</p>
         <div class="save-row"><span class="save-status" id="saveGridCsvStatus"></span></div>
         <div id="csvFallback" style="display:none;">
           <textarea id="csvFallbackText" class="lab-csv" readonly rows="7" aria-label="격자 원자료 CSV"></textarea>
@@ -1374,7 +1374,7 @@
       <span class="hint">변인 하나만 바꿔가며 반복 측정합니다</span>
     </div>
 
-    <p class="lab-intro">지금 캔버스에 그린 도시를 기준으로 <b>변인 하나만</b> 단계적으로 바꿔가며 시뮬레이션을 반복 실행합니다. 나머지 조건(시간대·바람·열원 계수·격자 크기)은 그대로 고정되므로, 결과 그래프는 <b>그 변인 하나가 만든 차이</b>로 읽을 수 있습니다. 결과는 그래프·표·CSV로 내보내 결과보고서에 바로 붙일 수 있어요.</p>
+    <p class="lab-intro">지금 캔버스에 그린 도시를 기준으로 <b>변인 하나만</b> 단계적으로 바꿔가며 시뮬레이션을 반복 실행합니다. 나머지 조건(시간대·바람·습도·기준기온·열원 계수·격자 크기)은 그대로 고정되므로, 결과 그래프는 <b>그 변인 하나가 만든 차이</b>로 읽을 수 있습니다. 결과는 그래프·표·CSV로 내보내 결과보고서에 바로 붙일 수 있어요.</p>
 
     <div class="lab-tabs" role="tablist" aria-label="실험 선택">
       <button class="lab-tab" data-exp="green" role="tab" aria-selected="true">① 녹지 비율 → 기온</button>
@@ -1391,7 +1391,7 @@
     <div class="lab-run">
       <label class="lab-reps">반복 <input type="number" id="labReps" min="1" max="30" step="1" value="6"> 회</label>
       <button class="btn btn-primary" id="btnRunExp">실험 실행 →</button>
-      <button class="btn" id="btnRunAllExp" title="여섯 실험을 차례로 모두 실행합니다. PDF 보고서에 실험 페이지가 모두 실립니다.">전체 실험 실행</button>
+      <button class="btn" id="btnRunAllExp">전체 실험 실행</button>
       <label class="lab-seed">시드
         <input type="number" id="labSeed" min="0" max="99999999" step="1" value="20260902" aria-label="난수 시드">
         <button class="citybtn" id="btnSeedRoll" type="button" title="무작위로 새 시드를 뽑습니다">새 시드</button>
@@ -2281,6 +2281,8 @@ function(t){t.__bidiEngine__=t.prototype.__bidiEngine__=function(t){var r,n,i,a,
     document.querySelectorAll(".citybtn[data-size]").forEach(function(b){
       b.setAttribute("aria-pressed", (+b.dataset.size === SIZE) ? "true" : "false");
     });
+    var csvCount = document.getElementById("gridCsvCount");
+    if (csvCount) csvCount.textContent = String(N);
     var note = document.getElementById("sizeNote");
     if (note) {
       note.innerHTML = "<b>" + N + "칸</b> · 칸이 많을수록 우리 동네를 세밀하게 그릴 수 있지만 AI 탐색과 실험은 느려집니다. " +
@@ -5692,6 +5694,9 @@ function(t){t.__bidiEngine__=t.prototype.__bidiEngine__=function(t){var r,n,i,a,
   // "1~5" survived two brushes being added and told students to press keys
   // that did nothing
   document.getElementById("brushCountHint").textContent = String(BRUSH_KEYS.length);
+  document.getElementById("expCountHint").textContent = String(LAB_ORDER.length);
+  document.getElementById("btnRunAllExp").title =
+    LAB_ORDER.length + "가지 실험을 차례로 모두 실행합니다. PDF 보고서에 실험 페이지가 모두 실립니다.";
 
   // ---- 설계안 보관함 (A / B / C) ----
   // The experiments sweep one variable automatically; this is the other half of
