@@ -996,6 +996,11 @@
   .onboarding strong{ display:block; margin-bottom:8px; font-size:14px; }
   .onboarding ol{ margin:0; padding-left:20px; display:flex; flex-direction:column; gap:5px; }
   .onboarding b{ color:var(--accent-text); }
+  .onboarding-aside{
+    margin:10px 0 0; padding-top:9px;
+    border-top:1px solid var(--line);
+    font-size:12px; line-height:1.7; color:var(--ink-mute);
+  }
   .onboarding-close{
     position:absolute;
     top:10px; right:12px;
@@ -1024,16 +1029,15 @@
 
   <div class="onboarding" id="onboarding" style="display:none;">
     <button class="onboarding-close" id="onboardingClose" aria-label="도움말 닫기">×</button>
-    <strong>처음이신가요? 이렇게 시작해보세요</strong>
+    <strong>탐구 보고서까지 가는 길</strong>
     <ol>
-      <li>브러시로 도시를 직접 칠하거나, <b>서울·부산·제주</b> 버튼으로 실제 통계 기반 도시를 만들어보세요</li>
-      <li><b>AI 최적화 실행</b>으로 녹지를 어디에 배치하면 열섬이 가장 줄어드는지 찾아보세요</li>
-      <li><b>3D 도시 생성</b>으로 입체 화면을 확인해보세요 (시간대·바람도 반영됩니다)</li>
-      <li>실측 온도가 있다면 <b>계수 보정</b>으로 정확도를 높이고, 아래 <b>탐구 실험실</b>에서 변인을 하나씩 바꿔가며 그래프를 뽑아보세요</li>
-      <li><b>AI 종합 설계</b>로 정해진 예산 안에서 어떤 대책을 어디에 쓸지 AI에게 맡겨보세요 (예산을 바꿔가며 돌리면 예산-저감량 곡선을 얻습니다)</li>
-      <li><b>쿨루프·차열포장</b> 브러시로 건물 지붕과 도로 표면만 바꿔보고, 실험 ⑤에서 같은 면적일 때 어떤 대책이 가장 효과적인지 비교해보세요</li>
-      <li>마우스가 없어도 됩니다 — 격자에서 <b>방향키</b>로 이동, <b>스페이스</b>로 칠하기, <b>숫자키 1~5</b>로 브러시 전환, <b>Ctrl+Z</b>로 되돌리기</li>
+      <li><b>도시를 만듭니다.</b> 브러시로 직접 칠하거나, <b>서울·부산·제주</b> 프리셋, 또는 <b>배치도 이미지 불러오기</b>로 우리 동네 지도를 넣으세요.</li>
+      <li><b>조건을 맞춥니다.</b> 측정한 날의 <b>기준기온</b>·시간대·바람을 넣고, 실측 온도가 있으면 <b>계수 보정</b>으로 모델을 우리 동네에 맞춥니다.</li>
+      <li><b>AI에게 맡깁니다.</b> <b>AI 최적화</b>는 녹지 칸 수를 그대로 둔 채 위치만 바꾸고, <b>AI 종합 설계</b>는 정해진 예산 안에서 어떤 대책(녹지·쿨루프·차열포장)을 어디에 쓸지까지 고릅니다.</li>
+      <li><b>실험합니다.</b> 아래 <b>탐구 실험실</b>에서 변인을 하나씩만 바꿔 6가지 실험을 돌립니다 — <b>전체 실험 실행</b>이면 한 번에 끝납니다.</li>
+      <li><b>보고서를 뽑습니다.</b> <b>PDF 탐구 보고서 생성</b>: 표지·도시 요약·3D 조감도에 실험마다 한 페이지씩, 마지막에 종합 결론과 이 모델의 한계까지 들어갑니다.</li>
     </ol>
+    <p class="onboarding-aside">알아두면 좋은 것 — 같은 <b>시드</b>면 결과가 그대로 재현되고, <b>설계안 A/B/C</b>로 우리 안을 나란히 비교하고, <b>공유 코드</b> 한 줄로 팀원에게 설계를 넘길 수 있습니다. 마우스 없이도 됩니다: 격자에서 방향키로 이동, 스페이스로 칠하기, <b>숫자키 1~7</b>로 브러시 전환, Ctrl+Z로 되돌리기.</p>
   </div>
 
   <div class="board">
@@ -1066,7 +1070,7 @@
         <button class="btn" id="btnUndo" title="되돌리기 (Ctrl+Z)" disabled>↩ 되돌리기</button>
         <button class="btn" id="btnRedo" title="다시 실행 (Ctrl+Shift+Z)" disabled>↪ 다시 실행</button>
         <button class="btn btn-primary" id="btnOptimize">AI 최적화 실행 →</button>
-        <input type="file" id="imageInput" accept="image/*" style="display:none">
+        <input type="file" id="imageInput" accept="image/*" aria-label="배치도 이미지 파일 선택" style="display:none">
       </div>
       <p class="import-note" id="importNote" style="display:none;"></p>
       <div class="import-mode" id="importMode" style="display:none;">
@@ -1243,7 +1247,7 @@
           <div class="coef-row"><span>공원·녹지(증발산)</span><span id="coefPark">기준 대비 −3.5℃</span></div>
           <div class="coef-row"><span>물(하천·수역)</span><span id="coefWater">기준 대비 −5.5℃</span></div>
         </div>
-        <p class="science-note">각 칸의 온도는 지표 재질별 열원값을 격자 확산(diffusion) 방식으로 10회 반복 계산해 이웃 칸과 열이 섞이는 효과를 근사한 값입니다. 모델에 들어간 가정은 네 가지입니다. <b>① 시간대</b>: 태양열 세기를 0.25배(야간)~1.2배(오후 1~2시 정점)로 스케일링합니다. <b>② 바람의 이류</b>: 상풍 쪽 이웃 칸에 가중치를 더 줘 하풍 방향으로 열이 더 강하게 퍼집니다. <b>③ 열린 경계</b>: 격자 바깥은 <b>기준기온</b>(위 환경 설정에서 지정, 기본 24℃)의 주변 공기로 보고 가장자리 칸이 그 공기와 열을 주고받습니다. 이 모델의 열은 이웃으로 1~2칸까지만 눈에 띄게 퍼지므로, 경계 효과도 가장 바깥 한두 줄이 약 0.1~0.7℃ 낮아지는 정도로 나타납니다(같은 이유로 공원 한 칸의 냉각 효과도 바로 옆 1~2칸까지입니다). <b>④ 환기 효과</b>: 바람이 셀수록 지표에서 공기로 열이 빠져나가는 속도가 빨라져 열섬 세기 자체가 최대 35%까지 줄어듭니다. <b>⑤ 저감 대책 재질</b>: 쿨루프는 지붕 반사율(알베도)을 높여 흡수하는 태양복사를 줄인 지붕, 차열포장은 표면 처리로 축열을 줄인 도로를 뜻합니다. 각각 원래 재질(건물 +5.5℃, 도로 +7.0℃)의 열원값을 <b>+2.5℃·+4.0℃</b>로 낮춰 잡았는데, 이는 문헌상 보고되는 표면온도 저감 폭을 이 모델의 상대 눈금으로 옮긴 <b>가정치</b>이지 인용 가능한 실측 계수가 아닙니다. 실측 보정 시에는 원래 재질(건물·도로)의 보정 배율을 그대로 따라갑니다. <b>⑥ 건물 높이</b>: 높이는 서로 반대 방향으로 작용하는 두 가지 효과로 열 계산에 들어갑니다. <b>낮에는 그늘</b> — 태양 쪽에 더 높은 건물이 있으면 직달 일사를 가려 그 칸의 태양 성분을 최대 45%까지 깎습니다(해가 낮을수록 그림자가 길어집니다). <b>밤에는 캐니언 효과</b> — 같은 높이가 하늘을 가려(하늘시계지수 SVF↓) 낮 동안 데워진 열이 빠져나가지 못하고 건물 사이에서 되반사됩니다. 그래서 빽빽한 블록은 한낮엔 트인 곳보다 시원하고 <b>새벽엔 더 덥습니다</b> — 실제 열섬의 일주기 모양입니다. 실제 실외 실측값이 아니라 배치 전략을 비교하기 위한 상대적 모델이며, 아래 보정 기능으로 실제 측정 데이터와 맞춰볼 수 있습니다.</p>
+        <p class="science-note">각 칸의 온도는 지표 재질별 열원값을 격자 확산(diffusion) 방식으로 10회 반복 계산해 이웃 칸과 열이 섞이는 효과를 근사한 값입니다. 모델에 들어간 가정은 여섯 가지입니다. <b>① 시간대</b>: 태양열 세기를 0.25배(야간)~1.2배(오후 1~2시 정점)로 스케일링합니다. <b>② 바람의 이류</b>: 상풍 쪽 이웃 칸에 가중치를 더 줘 하풍 방향으로 열이 더 강하게 퍼집니다. <b>③ 열린 경계</b>: 격자 바깥은 <b>기준기온</b>(위 환경 설정에서 지정, 기본 24℃)의 주변 공기로 보고 가장자리 칸이 그 공기와 열을 주고받습니다. 이 모델의 열은 이웃으로 1~2칸까지만 눈에 띄게 퍼지므로, 경계 효과도 가장 바깥 한두 줄이 약 0.1~0.7℃ 낮아지는 정도로 나타납니다(같은 이유로 공원 한 칸의 냉각 효과도 바로 옆 1~2칸까지입니다). <b>④ 환기 효과</b>: 바람이 셀수록 지표에서 공기로 열이 빠져나가는 속도가 빨라져 열섬 세기 자체가 최대 35%까지 줄어듭니다. <b>⑤ 저감 대책 재질</b>: 쿨루프는 지붕 반사율(알베도)을 높여 흡수하는 태양복사를 줄인 지붕, 차열포장은 표면 처리로 축열을 줄인 도로를 뜻합니다. 각각 원래 재질(건물 +5.5℃, 도로 +7.0℃)의 열원값을 <b>+2.5℃·+4.0℃</b>로 낮춰 잡았는데, 이는 문헌상 보고되는 표면온도 저감 폭을 이 모델의 상대 눈금으로 옮긴 <b>가정치</b>이지 인용 가능한 실측 계수가 아닙니다. 실측 보정 시에는 원래 재질(건물·도로)의 보정 배율을 그대로 따라갑니다. <b>⑥ 건물 높이</b>: 높이는 서로 반대 방향으로 작용하는 두 가지 효과로 열 계산에 들어갑니다. <b>낮에는 그늘</b> — 태양 쪽에 더 높은 건물이 있으면 직달 일사를 가려 그 칸의 태양 성분을 최대 45%까지 깎습니다(해가 낮을수록 그림자가 길어집니다). <b>밤에는 캐니언 효과</b> — 같은 높이가 하늘을 가려(하늘시계지수 SVF↓) 낮 동안 데워진 열이 빠져나가지 못하고 건물 사이에서 되반사됩니다. 그래서 빽빽한 블록은 한낮엔 트인 곳보다 시원하고 <b>새벽엔 더 덥습니다</b> — 실제 열섬의 일주기 모양입니다. 실제 실외 실측값이 아니라 배치 전략을 비교하기 위한 상대적 모델이며, 아래 보정 기능으로 실제 측정 데이터와 맞춰볼 수 있습니다.</p>
       </details>
 
       <details class="science" id="calibPanel">
@@ -1355,7 +1359,7 @@
     <div class="lab-body">
       <div class="lab-chart-wrap">
         <div class="lab-empty" id="labEmpty"><span>실험을 실행하면 여기에 결과 그래프가 그려집니다. 먼저 캔버스에 도시를 만든 뒤 <b>실험 실행</b>을 눌러보세요.</span></div>
-        <canvas id="labChart" style="display:none;" aria-label="실험 결과 그래프"></canvas>
+        <canvas id="labChart" role="img" style="display:none;" aria-label="실험 결과 그래프. 실험을 실행하면 결과 요약이 여기에 채워집니다."></canvas>
       </div>
       <div class="lab-side">
         <div class="lab-table-wrap" id="labTableWrap" style="display:none;">
@@ -1381,7 +1385,7 @@
     </details>
   </section>
 
-  <footer class="meta">건물·도로 비율은 고정, 공원 칸 수(예산) 고정 — AI는 배치만 최적화합니다. <button class="help-again" id="btnHelpAgain">도움말 다시 보기</button></footer>
+  <footer class="meta"><b>AI 최적화</b>는 녹지 칸 수를 고정한 채 위치만 바꾸고, <b>AI 종합 설계</b>는 정해진 예산 안에서 대책 종류까지 고릅니다. 결과는 절대 온도가 아니라 <b>조건 사이의 상대 비교</b>로 읽어 주세요. <button class="help-again" id="btnHelpAgain">도움말 다시 보기</button></footer>
 </div>
 
 <script>
@@ -5198,6 +5202,11 @@ function(t){t.__bidiEngine__=t.prototype.__bidiEngine__=function(t){var r,n,i,a,
     labEmptyEl.style.display = "none";
     labChartCanvas.style.display = "block";
     renderLabChart();
+    // the chart is a canvas and therefore invisible to a screen reader; the
+    // written finding is the same information the picture carries, and the
+    // table beside it holds the numbers
+    labChartCanvas.setAttribute("aria-label",
+      res.title + " 그래프. " + stripTags(res.conclusion) + " 조건별 수치는 옆의 결과 표에 있습니다.");
     renderLabTable(res);
     labConclusionEl.style.display = "block";
     labConclusionEl.innerHTML = res.conclusion;
@@ -5359,7 +5368,7 @@ function(t){t.__bidiEngine__=t.prototype.__bidiEngine__=function(t){var r,n,i,a,
       var sc = scenarios[k];
       return "<div class=\"slot\">" +
         "<span class=\"slot-tag\">" + k + "</span>" +
-        "<input class=\"slot-name\" id=\"slotName" + k + "\" maxlength=\"18\" placeholder=\"설계안 이름\" value=\"" +
+        "<input class=\"slot-name\" id=\"slotName" + k + "\" maxlength=\"18\" aria-label=\"" + k + " 슬롯 설계안 이름\" placeholder=\"설계안 이름\" value=\"" +
           (sc ? String(sc.name).replace(/\"/g, "&quot;") : "") + "\">" +
         "<button class=\"slot-btn\" data-act=\"save\" data-slot=\"" + k + "\">저장</button>" +
         "<button class=\"slot-btn\" data-act=\"load\" data-slot=\"" + k + "\"" + (sc ? "" : " disabled") + ">불러오기</button>" +
