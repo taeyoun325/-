@@ -328,6 +328,7 @@
   }
   .city-info b{ color:var(--ink); font-family:"IBM Plex Mono",monospace; font-variant-numeric:tabular-nums; }
   .city-info .src{ display:block; margin-top:4px; color:var(--ink-mute); font-size:10.5px; }
+  .size-note{ margin:-6px 0 12px; font-size:11px; color:var(--ink-mute); line-height:1.6; }
   .btn{
     font:700 12.5px "Gothic A1",sans-serif;
     border-radius:9px;
@@ -499,7 +500,7 @@
   .cell .val{
     position:absolute; inset:0;
     display:flex; align-items:center; justify-content:center;
-    font:600 8px/1 "IBM Plex Mono", monospace;
+    font:600 var(--cell-font, 8px)/1 "IBM Plex Mono", monospace;
     pointer-events:none;
   }
   .cell.moved::after{
@@ -1101,6 +1102,16 @@
         </div>
       </div>
       <div class="city-info" id="cityInfo" style="display:none;"></div>
+
+      <div class="city-row">
+        <span class="city-label">격자 해상도</span>
+        <div class="city-buttons" role="group" aria-label="격자 크기">
+          <button class="citybtn" data-size="12" aria-pressed="false">12×12</button>
+          <button class="citybtn" data-size="18" aria-pressed="true">18×18</button>
+          <button class="citybtn" data-size="24" aria-pressed="false">24×24</button>
+        </div>
+      </div>
+      <p class="size-note" id="sizeNote"></p>
 
       <div class="viewtabs" role="tablist" aria-label="캔버스 보기 전환">
         <button class="viewtab" id="tabFlat" role="tab" aria-selected="true">평면 편집(모식도)</button>
@@ -1893,18 +1904,24 @@ function(t){t.__bidiEngine__=t.prototype.__bidiEngine__=function(t){var r,n,i,a,
   }
 
   // ---- directional neighbor precompute (for wind-biased advection) ----
+  // Rebuilt whenever the grid resolution changes; everything below indexes into
+  // these, so they are the single place the new SIZE has to take effect.
   var neighborDir = []; // {W,E,N,S} each an index or -1
-  for (var y = 0; y < SIZE; y++) {
-    for (var x = 0; x < SIZE; x++) {
-      var i = y * SIZE + x;
-      neighborDir.push({
-        W: x > 0 ? i - 1 : -1,
-        E: x < SIZE - 1 ? i + 1 : -1,
-        N: y > 0 ? i - SIZE : -1,
-        S: y < SIZE - 1 ? i + SIZE : -1
-      });
+  function buildNeighborDir() {
+    neighborDir = [];
+    for (var y = 0; y < SIZE; y++) {
+      for (var x = 0; x < SIZE; x++) {
+        var i = y * SIZE + x;
+        neighborDir.push({
+          W: x > 0 ? i - 1 : -1,
+          E: x < SIZE - 1 ? i + 1 : -1,
+          N: y > 0 ? i - SIZE : -1,
+          S: y < SIZE - 1 ? i + SIZE : -1
+        });
+      }
     }
   }
+  buildNeighborDir();
 
   // Eight-neighbour lists for the sky view factor. Same reasoning as
   // neighborDir above: SVF runs for every cell of every diffusion solve, and
@@ -1912,19 +1929,23 @@ function(t){t.__bidiEngine__=t.prototype.__bidiEngine__=function(t){var r,n,i,a,
   // here rather than per cell per call. -1 marks an off-grid neighbour, which
   // counts as open sky.
   var neighbor8 = [];
-  for (var n8y = 0; n8y < SIZE; n8y++) {
-    for (var n8x = 0; n8x < SIZE; n8x++) {
-      var list = [];
-      for (var ody = -1; ody <= 1; ody++) {
-        for (var odx = -1; odx <= 1; odx++) {
-          if (!odx && !ody) continue;
-          var nx8 = n8x + odx, ny8 = n8y + ody;
-          list.push((nx8 < 0 || ny8 < 0 || nx8 >= SIZE || ny8 >= SIZE) ? -1 : ny8 * SIZE + nx8);
+  function buildNeighbor8() {
+    neighbor8 = [];
+    for (var n8y = 0; n8y < SIZE; n8y++) {
+      for (var n8x = 0; n8x < SIZE; n8x++) {
+        var list = [];
+        for (var ody = -1; ody <= 1; ody++) {
+          for (var odx = -1; odx <= 1; odx++) {
+            if (!odx && !ody) continue;
+            var nx8 = n8x + odx, ny8 = n8y + ody;
+            list.push((nx8 < 0 || ny8 < 0 || nx8 >= SIZE || ny8 >= SIZE) ? -1 : ny8 * SIZE + nx8);
+          }
         }
+        neighbor8.push(list);
       }
-      neighbor8.push(list);
     }
   }
+  buildNeighbor8();
 
   // Heat is carried downwind: the neighbor upwind of a cell (the one the wind
   // blows FROM) gets extra weight in that cell's local average, approximating
@@ -2135,21 +2156,76 @@ function(t){t.__bidiEngine__=t.prototype.__bidiEngine__=function(t){var r,n,i,a,
 
   // ---- DOM: build grid ----
   var gridEl = document.getElementById("cellGrid");
-  gridEl.style.gridTemplateColumns = "repeat(" + SIZE + ", 1fr)";
   var cellEls = [];
-  for (var i0 = 0; i0 < N; i0++) {
-    var c = document.createElement("div");
-    c.className = "cell";
-    c.dataset.i = i0;
-    c.setAttribute("role", "gridcell");
-    // roving tabindex: exactly one cell is in the tab order at a time, so Tab
-    // steps past the whole grid instead of through 324 stops
-    c.tabIndex = i0 === 0 ? 0 : -1;
-    var val = document.createElement("span");
-    val.className = "val";
-    c.appendChild(val);
-    gridEl.appendChild(c);
-    cellEls.push(c);
+  function buildGridDom() {
+    gridEl.style.gridTemplateColumns = "repeat(" + SIZE + ", 1fr)";
+    // the per-cell temperature label has to shrink with the cells or it spills
+    gridEl.style.setProperty("--cell-font", (SIZE >= 24 ? 6 : SIZE >= 18 ? 8 : 11) + "px");
+    gridEl.setAttribute("aria-label", SIZE + "×" + SIZE + " 도시 격자, 방향키로 이동하고 스페이스로 칠합니다. 셀 색은 예상 지표 온도를 나타냅니다.");
+    gridEl.innerHTML = "";
+    cellEls = [];
+    for (var i0 = 0; i0 < N; i0++) {
+      var c = document.createElement("div");
+      c.className = "cell";
+      c.dataset.i = i0;
+      c.setAttribute("role", "gridcell");
+      // roving tabindex: exactly one cell is in the tab order at a time, so Tab
+      // steps past the whole grid instead of through every cell
+      c.tabIndex = i0 === 0 ? 0 : -1;
+      var val = document.createElement("span");
+      val.className = "val";
+      c.appendChild(val);
+      gridEl.appendChild(c);
+      cellEls.push(c);
+    }
+  }
+  buildGridDom();
+
+  // ---- grid resolution ----
+  // 18x18 over a neighbourhood makes each cell a fairly coarse block. Letting
+  // the team pick the resolution is the difference between "a schematic" and
+  // "our actual street layout". Nearest-neighbour resampling keeps whatever
+  // they have already drawn instead of clearing it: going up duplicates cells,
+  // going down drops them, and either way the shape of the layout survives.
+  var GRID_SIZES = [12, 18, 24];
+  function resampleGrid(src, fromSize, toSize) {
+    var out = new Array(toSize * toSize);
+    for (var y = 0; y < toSize; y++) {
+      for (var x = 0; x < toSize; x++) {
+        var sx = Math.min(fromSize - 1, Math.floor((x + 0.5) * fromSize / toSize));
+        var sy = Math.min(fromSize - 1, Math.floor((y + 0.5) * fromSize / toSize));
+        out[y * toSize + x] = src[sy * fromSize + sx];
+      }
+    }
+    return out;
+  }
+  function setGridSize(newSize, presetGrid) {
+    if (GRID_SIZES.indexOf(newSize) < 0) return;
+    var nextGrid = presetGrid || resampleGrid(grid, SIZE, newSize);
+    SIZE = newSize;
+    N = SIZE * SIZE;
+    grid = nextGrid;
+    temps = new Float32Array(N);
+    buildNeighborDir();
+    buildNeighbor8();
+    buildCellPr();
+    buildScratchBuffers();
+    buildGridDom();
+    focusIdx = 0;
+    clearCityPresetUI();
+    updateSizeButtons();
+    render();
+    commitGridChange();
+  }
+  function updateSizeButtons() {
+    document.querySelectorAll(".citybtn[data-size]").forEach(function(b){
+      b.setAttribute("aria-pressed", (+b.dataset.size === SIZE) ? "true" : "false");
+    });
+    var note = document.getElementById("sizeNote");
+    if (note) {
+      note.innerHTML = "<b>" + N + "칸</b> · 칸이 많을수록 우리 동네를 세밀하게 그릴 수 있지만 AI 탐색과 실험은 느려집니다. " +
+        "해상도를 <b>낮추면</b> 하천처럼 칸 수가 적은 요소가 사라질 수 있고 다시 올려도 돌아오지 않습니다 — <b>되돌리기(Ctrl+Z)</b>로 이전 해상도까지 복구됩니다.";
+    }
   }
 
   // ---- undo / redo ----
@@ -2163,9 +2239,9 @@ function(t){t.__bidiEngine__=t.prototype.__bidiEngine__=function(t){var r,n,i,a,
   var btnUndo = document.getElementById("btnUndo");
   var btnRedo = document.getElementById("btnRedo");
 
-  function sameGrid(a, b) {
-    if (!a || !b || a.length !== b.length) return false;
-    for (var i = 0; i < a.length; i++) if (a[i] !== b[i]) return false;
+  function sameSnapshot(entry) {
+    if (!entry || entry.size !== SIZE || entry.grid.length !== grid.length) return false;
+    for (var i = 0; i < grid.length; i++) if (entry.grid[i] !== grid[i]) return false;
     return true;
   }
   function updateUndoButtons() {
@@ -2176,9 +2252,9 @@ function(t){t.__bidiEngine__=t.prototype.__bidiEngine__=function(t){var r,n,i,a,
   // It is a no-op unless the grid actually differs from the last snapshot, so
   // over-calling it costs one comparison and never pollutes the history.
   function commitGridChange() {
-    if (sameGrid(grid, gridHistory[gridHistoryIdx])) return;
+    if (sameSnapshot(gridHistory[gridHistoryIdx])) return;
     gridHistory = gridHistory.slice(0, gridHistoryIdx + 1);
-    gridHistory.push(grid.slice());
+    gridHistory.push({ grid: grid.slice(), size: SIZE });
     if (gridHistory.length > GRID_HISTORY_MAX) gridHistory.shift();
     gridHistoryIdx = gridHistory.length - 1;
     updateUndoButtons();
@@ -2187,7 +2263,17 @@ function(t){t.__bidiEngine__=t.prototype.__bidiEngine__=function(t){var r,n,i,a,
     var target = gridHistoryIdx + delta;
     if (target < 0 || target >= gridHistory.length) return;
     gridHistoryIdx = target;
-    grid = gridHistory[target].slice();
+    var entry = gridHistory[target];
+    if (entry.size !== SIZE) {
+      // step the whole grid back to the resolution this snapshot was taken at
+      SIZE = entry.size;
+      N = SIZE * SIZE;
+      temps = new Float32Array(N);
+      buildNeighborDir(); buildNeighbor8(); buildCellPr(); buildScratchBuffers(); buildGridDom();
+      focusIdx = 0;
+      updateSizeButtons();
+    }
+    grid = entry.grid.slice();
     clearCityPresetUI();
     render();
     updateUndoButtons();
@@ -2389,7 +2475,11 @@ function(t){t.__bidiEngine__=t.prototype.__bidiEngine__=function(t){var r,n,i,a,
   // height field, and the annealers run thousands of solves), so the per-cell
   // draw is computed once instead of a Math.sin per cell per call
   var CELL_PR = new Float32Array(N);
-  for (var prI = 0; prI < N; prI++) CELL_PR[prI] = pseudoRand(prI);
+  function buildCellPr() {
+    CELL_PR = new Float32Array(N);
+    for (var prI = 0; prI < N; prI++) CELL_PR[prI] = pseudoRand(prI);
+  }
+  buildCellPr();
   // 3D shape is looked up from the materials table, so a treated surface
   // (쿨루프 / 차열포장) keeps the massing of the thing it replaced and only its
   // colour -- which comes from the temperature -- tells them apart.
@@ -3009,6 +3099,9 @@ function(t){t.__bidiEngine__=t.prototype.__bidiEngine__=function(t){var r,n,i,a,
   document.querySelectorAll(".citybtn[data-city]").forEach(function(btn){
     btn.addEventListener("click", function(){ generateCityPreset(btn.dataset.city); commitGridChange(); });
   });
+  document.querySelectorAll(".citybtn[data-size]").forEach(function(btn){
+    btn.addEventListener("click", function(){ setGridSize(+btn.dataset.size); });
+  });
 
   // ---- import from a map screenshot or an aerial photo ----
   // Per-cell classification uses the RATIO of pixel categories inside each cell,
@@ -3091,6 +3184,10 @@ function(t){t.__bidiEngine__=t.prototype.__bidiEngine__=function(t){var r,n,i,a,
   // is still returned as a fresh copy), so no caller can be aliased by them.
   var _bufA = new Float32Array(N), _bufB = new Float32Array(N);
   var _hfBuf = new Float32Array(N), _srcBuf = new Float32Array(N);
+  function buildScratchBuffers() {
+    _bufA = new Float32Array(N); _bufB = new Float32Array(N);
+    _hfBuf = new Float32Array(N); _srcBuf = new Float32Array(N);
+  }
 
   var MAP_TEXTURE_MAX = 0.12; // measured: map artwork ~0.06, aerial ~0.20
   function detectSourceMode(st) {
@@ -5430,7 +5527,11 @@ function(t){t.__bidiEngine__=t.prototype.__bidiEngine__=function(t){var r,n,i,a,
     }
     var rows = [{ label: "지금 캔버스", stats: scenarioStats(grid), current: true }];
     filled.forEach(function(k){
-      rows.push({ label: k + ". " + scenarios[k].name, stats: scenarioStats(scenarios[k].grid) });
+      var sc = scenarios[k];
+      var sz = sc.size || Math.round(Math.sqrt(sc.grid.length));
+      // compare on the current grid so every row runs through the same tables
+      var g = (sz === SIZE) ? sc.grid : resampleGrid(sc.grid, sz, SIZE);
+      rows.push({ label: k + ". " + sc.name, stats: scenarioStats(g) });
     });
     var best = rows.reduce(function(a, b){ return b.stats.avg < a.stats.avg ? b : a; });
     slotCompareEl.innerHTML =
@@ -5458,10 +5559,12 @@ function(t){t.__bidiEngine__=t.prototype.__bidiEngine__=function(t){var r,n,i,a,
     var k = btn.dataset.slot;
     if (btn.dataset.act === "save") {
       var nameEl = document.getElementById("slotName" + k);
-      scenarios[k] = { name: (nameEl.value || "").trim() || ("설계안 " + k), grid: grid.slice() };
+      scenarios[k] = { name: (nameEl.value || "").trim() || ("설계안 " + k), grid: grid.slice(), size: SIZE };
     } else if (btn.dataset.act === "load") {
       if (!scenarios[k]) return;
-      grid = scenarios[k].grid.slice();
+      var sc = scenarios[k];
+      var sz = sc.size || Math.round(Math.sqrt(sc.grid.length));
+      grid = (sz === SIZE) ? sc.grid.slice() : resampleGrid(sc.grid, sz, SIZE);
       clearCityPresetUI();
       render();
       commitGridChange();
@@ -5558,9 +5661,12 @@ function(t){t.__bidiEngine__=t.prototype.__bidiEngine__=function(t){var r,n,i,a,
     }
     var p = text.split("|");
     if (p[0] !== "CCG1") return { ok: false, why: "이 버전에서 읽을 수 없는 코드입니다." };
-    if (+p[1] !== SIZE) return { ok: false, why: "격자 크기가 다른 코드입니다(" + p[1] + "×" + p[1] + ")." };
+    // a teammate may be working at another resolution; adopt theirs rather than
+    // refusing the code outright
+    var codeSize = +p[1];
+    if (GRID_SIZES.indexOf(codeSize) < 0) return { ok: false, why: "이 버전이 지원하지 않는 격자 크기입니다(" + p[1] + ")." };
     var cells = rleDecode(p[7] || "");
-    if (!cells || cells.length !== N) return { ok: false, why: "격자 자료가 손상되었습니다." };
+    if (!cells || cells.length !== codeSize * codeSize) return { ok: false, why: "격자 자료가 손상되었습니다." };
 
     // name=value pairs, so a code written before a material existed still
     // applies the coefficients it does carry and leaves the rest at default
@@ -5578,7 +5684,8 @@ function(t){t.__bidiEngine__=t.prototype.__bidiEngine__=function(t){var r,n,i,a,
     var ws = parseInt(p[5], 10);
     if (isFinite(ws)) windStrength = Math.max(0, Math.min(100, ws)) / 100;
 
-    grid = cells;
+    if (codeSize !== SIZE) setGridSize(codeSize, cells);
+    else grid = cells;
     clearCityPresetUI();
     lastCalibResult = null;
     lastHoldout = null;
@@ -5916,6 +6023,7 @@ function(t){t.__bidiEngine__=t.prototype.__bidiEngine__=function(t){var r,n,i,a,
         windStrength: windStrength,
         source: SOURCE,
         ambient: AMBIENT,
+        size: SIZE,
         seed: labSeedEl.value,
         scenarios: scenarios,
         isoRotation: isoRotation,
@@ -5928,7 +6036,15 @@ function(t){t.__bidiEngine__=t.prototype.__bidiEngine__=function(t){var r,n,i,a,
       var raw = localStorage.getItem(STORAGE_KEY);
       if (!raw) return false;
       var state = JSON.parse(raw);
-      if (!state || !Array.isArray(state.grid) || state.grid.length !== N) return false;
+      if (!state || !Array.isArray(state.grid)) return false;
+      // the stored grid defines the resolution, so adopt it before validating
+      // the length against N
+      if (GRID_SIZES.indexOf(state.size) >= 0 && state.size !== SIZE) {
+        SIZE = state.size; N = SIZE * SIZE;
+        buildNeighborDir(); buildNeighbor8(); buildCellPr(); buildScratchBuffers(); buildGridDom();
+        temps = new Float32Array(N);
+      }
+      if (state.grid.length !== N) return false;
       // reject a grid containing anything the materials table doesn't know:
       // an unrecognised cell would throw on the first MATERIALS[...] lookup and
       // take the page down, which is worse than starting fresh
@@ -5949,9 +6065,11 @@ function(t){t.__bidiEngine__=t.prototype.__bidiEngine__=function(t){var r,n,i,a,
       if (state.scenarios && typeof state.scenarios === "object") {
         SCENARIO_KEYS.forEach(function(k){
           var sc = state.scenarios[k];
-          if (!sc || !Array.isArray(sc.grid) || sc.grid.length !== N) return;
+          if (!sc || !Array.isArray(sc.grid)) return;
+          var sz = sc.size || Math.round(Math.sqrt(sc.grid.length));
+          if (GRID_SIZES.indexOf(sz) < 0 || sc.grid.length !== sz * sz) return;
           if (sc.grid.some(function(c){ return !MATERIALS[c]; })) return;
-          scenarios[k] = { name: String(sc.name || ("설계안 " + k)), grid: sc.grid };
+          scenarios[k] = { name: String(sc.name || ("설계안 " + k)), grid: sc.grid, size: sz };
         });
       }
       if (typeof state.isoRotation === "number") isoRotation = state.isoRotation;
@@ -6000,5 +6118,6 @@ function(t){t.__bidiEngine__=t.prototype.__bidiEngine__=function(t){var r,n,i,a,
   }
   commitGridChange();
   refreshScenarioUI();
+  updateSizeButtons();
 })();
 </script>
