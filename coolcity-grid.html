@@ -425,7 +425,19 @@
     display:flex; align-items:center; justify-content:center;
     box-shadow:var(--shadow);
   }
-  .iso-btn:hover{ color:var(--accent); }
+  .iso-btn:hover:not(:disabled){ color:var(--accent); }
+  .iso-btn:disabled{ opacity:.4; cursor:not-allowed; }
+  .iso-btn-wide{ width:auto; padding:0 8px; font-size:11px; }
+  .iso-zoom{
+    align-self:center;
+    min-width:38px; text-align:center;
+    font:600 10.5px "IBM Plex Mono",monospace;
+    color:var(--ink-dim);
+    background:var(--panel); border:1px solid var(--line);
+    border-radius:7px; padding:3px 0;
+  }
+  .iso-stage.panning{ cursor:grabbing; }
+  #isoCanvas{ cursor:grab; touch-action:none; }
 
   .iso-loading{
     position:absolute; inset:0;
@@ -1129,6 +1141,10 @@
             <div class="iso-controls">
               <button class="iso-btn" id="isoRotateLeft" title="왼쪽으로 회전">↺</button>
               <button class="iso-btn" id="isoRotateRight" title="오른쪽으로 회전">↻</button>
+              <button class="iso-btn" id="isoZoomOut" title="축소">−</button>
+              <span class="iso-zoom" id="isoZoomLabel">100%</span>
+              <button class="iso-btn" id="isoZoomIn" title="확대">+</button>
+              <button class="iso-btn iso-btn-wide" id="isoReset" title="확대·이동 되돌리기" disabled>처음 시점</button>
             </div>
             <div class="iso-loading" id="isoLoading">
               <div class="iso-loading-bar"><div class="iso-loading-fill" id="isoLoadingFill"></div></div>
@@ -2516,6 +2532,47 @@ function(t){t.__bidiEngine__=t.prototype.__bidiEngine__=function(t){var r,n,i,a,
   // ---- isometric 3D view ----
   var ISO_TILE_W = 26, ISO_TILE_H = 13, ISO_HEIGHT_SCALE = 9, ISO_MAX_H = 8;
   var isoRotation = 0;
+  // Zoom and pan are applied as a canvas transform around the city drawing
+  // rather than by scaling ISO_TILE_W and friends. Those constants are read in
+  // a dozen places including helpers that take no parameters, so scaling them
+  // individually would be a standing invitation to miss one; a transform cannot
+  // miss anything. The sky is drawn before the transform so it stays put.
+  var ISO_ZOOM_MIN = 0.6, ISO_ZOOM_MAX = 3.0;
+  var isoZoom = 1, isoPanX = 0, isoPanY = 0;
+  function clampIsoPan(isoW, isoH) {
+    // keep at least a little of the city reachable at any zoom
+    var limX = isoW * 0.6 * isoZoom, limY = isoH * 0.6 * isoZoom;
+    isoPanX = Math.max(-limX, Math.min(limX, isoPanX));
+    isoPanY = Math.max(-limY, Math.min(limY, isoPanY));
+  }
+  function setIsoZoom(z, focusX, focusY, isoW, isoH) {
+    var next = Math.max(ISO_ZOOM_MIN, Math.min(ISO_ZOOM_MAX, z));
+    if (next === isoZoom) return;
+    // keep whatever is under the focus point pinned there while zooming
+    if (focusX != null) {
+      var cx = isoW / 2, cy = isoH / 2;
+      var k = next / isoZoom;
+      isoPanX = focusX - cx - (focusX - cx - isoPanX) * k;
+      isoPanY = focusY - cy - (focusY - cy - isoPanY) * k;
+    }
+    isoZoom = next;
+    clampIsoPan(isoW, isoH);
+    updateIsoViewUi();
+    drawIso();
+    scheduleSave();
+  }
+  function resetIsoView() {
+    isoZoom = 1; isoPanX = 0; isoPanY = 0;
+    updateIsoViewUi();
+    drawIso();
+    scheduleSave();
+  }
+  function updateIsoViewUi() {
+    var el = document.getElementById("isoZoomLabel");
+    if (el) el.textContent = Math.round(isoZoom * 100) + "%";
+    var rst = document.getElementById("isoReset");
+    if (rst) rst.disabled = (isoZoom === 1 && isoPanX === 0 && isoPanY === 0);
+  }
 
   function pseudoRand(i) {
     var x = Math.sin(i * 12.9898) * 43758.5453;
@@ -2724,6 +2781,14 @@ function(t){t.__bidiEngine__=t.prototype.__bidiEngine__=function(t){var r,n,i,a,
       isoCtx.beginPath(); isoCtx.ellipse(cx0-15*cScale, cy0+3*cScale, 13*cScale, 6*cScale, 0, 0, Math.PI*2); isoCtx.fill();
     }
 
+    // everything from here on is the city itself, drawn in world coordinates;
+    // the sky above stays in screen space so it does not slide around
+    clampIsoPan(isoW, isoH);
+    isoCtx.save();
+    isoCtx.translate(isoW / 2 + isoPanX, isoH / 2 + isoPanY);
+    isoCtx.scale(isoZoom, isoZoom);
+    isoCtx.translate(-isoW / 2, -isoH / 2);
+
     var originX = isoW / 2;
     var originY = ISO_MAX_H * ISO_HEIGHT_SCALE + 30;
     var hw = ISO_TILE_W / 2, hh = ISO_TILE_H / 2;
@@ -2854,6 +2919,8 @@ function(t){t.__bidiEngine__=t.prototype.__bidiEngine__=function(t){var r,n,i,a,
         if (type === "treeroad") drawTreeCanopy(o.i, baseX, topY, hw, hh);
       }
     }
+
+    isoCtx.restore();
   }
 
   // ---- road life: a car and/or pedestrians on some road tiles ----
@@ -3024,7 +3091,7 @@ function(t){t.__bidiEngine__=t.prototype.__bidiEngine__=function(t){var r,n,i,a,
     paneIso.classList.toggle("active", !isFlat);
     tabFlat.setAttribute("aria-selected", isFlat ? "true" : "false");
     tabIso.setAttribute("aria-selected", isFlat ? "false" : "true");
-    canvasHint.textContent = isFlat ? "클릭 후 드래그, 또는 방향키+스페이스" : "회전 버튼으로 각도를 바꿔보세요";
+    canvasHint.textContent = isFlat ? "클릭 후 드래그, 또는 방향키+스페이스" : "끌어서 이동 · 휠로 확대 · 버튼으로 회전";
     toggleNumsRow.style.display = isFlat ? "flex" : "none";
     if (isFlat) {
       stopIsoAnim();
@@ -3037,6 +3104,61 @@ function(t){t.__bidiEngine__=t.prototype.__bidiEngine__=function(t){var r,n,i,a,
   tabIso.addEventListener("click", function(){ selectView("iso"); });
   document.getElementById("isoRotateLeft").addEventListener("click", function(){ isoRotation -= 1; drawIso(); scheduleSave(); });
   document.getElementById("isoRotateRight").addEventListener("click", function(){ isoRotation += 1; drawIso(); scheduleSave(); });
+
+  // The canvas is drawn at a fixed internal size and stretched by CSS, so a
+  // pointer position has to be converted into that internal space before it can
+  // be used as a zoom focus or a pan delta.
+  function isoCanvasSize() {
+    var dpr = window.devicePixelRatio || 1;
+    return { w: isoCanvas.width / dpr, h: isoCanvas.height / dpr };
+  }
+  function isoPointerPos(e) {
+    var r = isoCanvas.getBoundingClientRect();
+    var size = isoCanvasSize();
+    return { x: (e.clientX - r.left) * (size.w / r.width), y: (e.clientY - r.top) * (size.h / r.height) };
+  }
+  document.getElementById("isoZoomIn").addEventListener("click", function(){
+    var sz = isoCanvasSize(); setIsoZoom(isoZoom * 1.35, null, null, sz.w, sz.h);
+  });
+  document.getElementById("isoZoomOut").addEventListener("click", function(){
+    var sz = isoCanvasSize(); setIsoZoom(isoZoom / 1.35, null, null, sz.w, sz.h);
+  });
+  document.getElementById("isoReset").addEventListener("click", resetIsoView);
+
+  isoCanvas.addEventListener("wheel", function(e){
+    e.preventDefault();
+    var sz = isoCanvasSize(), pt = isoPointerPos(e);
+    setIsoZoom(isoZoom * (e.deltaY < 0 ? 1.12 : 1 / 1.12), pt.x, pt.y, sz.w, sz.h);
+  }, { passive: false });
+
+  var isoDrag = null;
+  isoCanvas.addEventListener("pointerdown", function(e){
+    isoDrag = { x: e.clientX, y: e.clientY, moved: false };
+    isoCanvas.setPointerCapture(e.pointerId);
+    isoCanvas.parentNode.classList.add("panning");
+  });
+  isoCanvas.addEventListener("pointermove", function(e){
+    if (!isoDrag) return;
+    var r = isoCanvas.getBoundingClientRect();
+    var size = isoCanvasSize();
+    var k = size.w / r.width;
+    isoPanX += (e.clientX - isoDrag.x) * k;
+    isoPanY += (e.clientY - isoDrag.y) * k;
+    isoDrag.x = e.clientX; isoDrag.y = e.clientY; isoDrag.moved = true;
+    var sz = isoCanvasSize();
+    clampIsoPan(sz.w, sz.h);
+    updateIsoViewUi();
+    drawIso();
+  });
+  function endIsoDrag(e){
+    if (!isoDrag) return;
+    isoDrag = null;
+    isoCanvas.parentNode.classList.remove("panning");
+    try { isoCanvas.releasePointerCapture(e.pointerId); } catch (err) {}
+    scheduleSave();
+  }
+  isoCanvas.addEventListener("pointerup", endIsoDrag);
+  isoCanvas.addEventListener("pointercancel", endIsoDrag);
 
   function updateStatsPanel() {
     var s = occupiedStats(grid, temps);
@@ -4093,7 +4215,12 @@ function(t){t.__bidiEngine__=t.prototype.__bidiEngine__=function(t){var r,n,i,a,
     var cover = renderCoverPageCanvas();
     var summary = renderSummaryCardCanvas();
     if (!heatStops) refreshHeatStops();
-    drawIso(); // ensure the iso canvas reflects the current grid regardless of which tab is active
+    // The report page is titled 조감도, so it shows the whole city: a reader
+    // opening the PDF should not get whatever corner the author happened to be
+    // zoomed into. The on-screen view is put back straight afterwards.
+    var keepZoom = isoZoom, keepX = isoPanX, keepY = isoPanY;
+    isoZoom = 1; isoPanX = 0; isoPanY = 0;
+    drawIso();
     var isoShot = isoCanvas;
     var isoW = isoShot.width / (window.devicePixelRatio || 1);
     var isoH = isoShot.height / (window.devicePixelRatio || 1);
@@ -4122,6 +4249,9 @@ function(t){t.__bidiEngine__=t.prototype.__bidiEngine__=function(t){var r,n,i,a,
 
     doc.addPage([isoPage.width, isoPage.height]);
     doc.addImage(isoPage.toDataURL("image/png"), "PNG", 0, 0, isoPage.width, isoPage.height);
+
+    isoZoom = keepZoom; isoPanX = keepX; isoPanY = keepY;
+    drawIso();
 
     LAB_ORDER.forEach(function(key){
       var res = labResults[key];
@@ -6116,6 +6246,9 @@ function(t){t.__bidiEngine__=t.prototype.__bidiEngine__=function(t){var r,n,i,a,
         seed: labSeedEl.value,
         scenarios: scenarios,
         isoRotation: isoRotation,
+        isoZoom: isoZoom,
+        isoPanX: isoPanX,
+        isoPanY: isoPanY,
         labResults: labResults
       }));
     } catch (e) {}
@@ -6163,6 +6296,9 @@ function(t){t.__bidiEngine__=t.prototype.__bidiEngine__=function(t){var r,n,i,a,
         });
       }
       if (typeof state.isoRotation === "number") isoRotation = state.isoRotation;
+      if (typeof state.isoZoom === "number") isoZoom = Math.max(ISO_ZOOM_MIN, Math.min(ISO_ZOOM_MAX, state.isoZoom));
+      if (typeof state.isoPanX === "number") isoPanX = state.isoPanX;
+      if (typeof state.isoPanY === "number") isoPanY = state.isoPanY;
       // restored experiments keep the control conditions they were run under
       // printed alongside them, so a stale result is visible as stale rather
       // than silently attributed to whatever city is on screen now
@@ -6210,5 +6346,6 @@ function(t){t.__bidiEngine__=t.prototype.__bidiEngine__=function(t){var r,n,i,a,
   commitGridChange();
   refreshScenarioUI();
   updateSizeButtons();
+  updateIsoViewUi();
 })();
 </script>
